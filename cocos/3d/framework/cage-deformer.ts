@@ -5,19 +5,22 @@ import { EDITOR } from 'internal:constants';
  https://www.cocos.com/
 */
 
-import { Color, Mat4, Vec3, Vec4, _decorator, CCBoolean, CCFloat, CCInteger, cclegacy } from '../../core';
+import { Color, Mat4, Quat, Vec3, Vec4, _decorator, CCBoolean, CCFloat, CCInteger, cclegacy } from '../../core';
 import { Component } from '../../scene-graph';
 import { Mesh } from '../assets/mesh';
 import { MeshRenderer } from './mesh-renderer';
-import { createCageInfluenceMesh, MAX_CAGE_CONTROLS, stepCageSpring } from '../misc/cage-deform';
+import { buildDefaultCageLayout, createCageInfluenceMesh, MAX_CAGE_CONTROLS, stepCageSpring } from '../misc/cage-deform';
 
-const { ccclass, executeInEditMode, menu, property, requireComponent, range, type } = _decorator;
+const { ccclass, executeInEditMode, menu, property, requireComponent, range } = _decorator;
 
 const _inverseWorld = new Mat4();
 const _localDirection = new Vec3();
 const _worldControl = new Vec3();
 const _localPoint = new Vec3();
 const _debugPrevious = new Vec3();
+const _restDelta = new Vec3();
+const _rotatedDelta = new Vec3();
+const _localRotation = new Quat();
 const DEBUG_COLOR = new Color(0, 255, 255, 255);
 
 const MESH_CACHE = new WeakMap<Mesh, Map<number, Mesh>>();
@@ -38,11 +41,10 @@ function getCageMesh(source: Mesh, controlCount: number): Mesh {
 }
 
 /**
- * Lightweight GPU cage deformation prototype for vegetation.
+ * Lightweight hierarchical GPU cage deformation for vegetation.
  *
- * v0.1 uses a compact vertical control chain and two influences per vertex.
- * CPU work is limited to a handful of spring controls; vertices are deformed
- * exclusively in the vertex shader.
+ * CPU simulates only bend angles for a small control hierarchy. The dense mesh
+ * uses four precomputed influences and is deformed entirely in the vertex stage.
  */
 @ccclass('cc.CageDeformer')
 @menu('Mesh/CageDeformer')
@@ -51,11 +53,11 @@ function getCageMesh(source: Mesh, controlCount: number): Mesh {
 export class CageDeformer extends Component {
     @property({ type: CCInteger })
     @range([2, MAX_CAGE_CONTROLS, 1])
-    public controlCount = 6;
+    public controlCount = 7;
 
     @property({ type: CCFloat })
-    @range([0, 5, 0.01])
-    public windStrength = 0.35;
+    @range([0, 1.5, 0.001])
+    public windStrength = 0.18;
 
     @property({ type: CCFloat })
     @range([0, 5, 0.01])
@@ -63,19 +65,19 @@ export class CageDeformer extends Component {
 
     @property({ type: CCFloat })
     @range([0, 100, 0.1])
-    public stiffness = 18;
+    public stiffness = 16;
 
     @property({ type: CCFloat })
     @range([0, 1, 0.001])
     public damping = 0.9;
 
     @property({ type: CCFloat })
-    @range([0, 10, 0.01])
-    public maxDisplacement = 1.5;
+    @range([0, 1.5, 0.001])
+    public maxBendAngle = 0.65;
 
     @property({ type: CCFloat })
     @range([0, 1, 0.001])
-    public flutterStrength = 0.02;
+    public flutterStrength = 0.015;
 
     @property({ type: CCFloat })
     @range([0, 20, 0.01])
@@ -92,16 +94,23 @@ export class CageDeformer extends Component {
     private _cageMesh: Mesh | null = null;
     private _controlCount = 0;
     private _time = 0;
-    private _offsets: Vec3[] = [];
-    private _velocities: Vec3[] = [];
-    private _targets: Vec3[] = [];
+
+    private _parents: number[] = [];
     private _restControls: Vec3[] = [];
+    private _bendAngles: Vec3[] = [];
+    private _angularVelocities: Vec3[] = [];
+    private _angleTargets: Vec3[] = [];
+    private _globalPositions: Vec3[] = [];
+    private _globalRotations: Quat[] = [];
+
+    private _uniformRest: Vec4[] = [];
     private _uniformOffsets: Vec4[] = [];
+    private _uniformRotations: Vec4[] = [];
     private _params = new Vec4();
     private _springSettings = {
-        stiffness: 18,
+        stiffness: 16,
         damping: 0.9,
-        maxDisplacement: 1.5,
+        maxDisplacement: 0.65,
     };
     private _materialInstances: ReturnType<MeshRenderer['getMaterialInstance']>[] = [];
 
@@ -127,26 +136,32 @@ export class CageDeformer extends Component {
 
         this._springSettings.stiffness = this.stiffness;
         this._springSettings.damping = this.damping;
-        this._springSettings.maxDisplacement = this.maxDisplacement;
+        this._springSettings.maxDisplacement = this.maxBendAngle;
 
-        // Root stays planted. Higher controls receive progressively stronger
-        // wind and a phase lag that makes the crown trail behind the trunk.
-        this._offsets[0].set(0, 0, 0);
-        this._velocities[0].set(0, 0, 0);
-        this._targets[0].set(0, 0, 0);
+        this._bendAngles[0].set(0, 0, 0);
+        this._angularVelocities[0].set(0, 0, 0);
+        this._angleTargets[0].set(0, 0, 0);
 
         for (let i = 1; i < this._controlCount; ++i) {
-            const height = i / (this._controlCount - 1);
-            const amplitude = this.windStrength * height * height;
-            const phase = this._time * this.windFrequency * Math.PI * 2 - i * 0.28;
-            this._targets[i].set(
-                Math.sin(phase) * amplitude,
-                0,
+            const height = this._normalizedControlHeight(i);
+            const branchBoost = this._parents[i] >= 0 && this._parents[i] < i - 1 ? 1.2 : 1.0;
+            const amplitude = this.windStrength * height * height * branchBoost;
+            const phase = this._time * this.windFrequency * Math.PI * 2 - i * 0.31;
+            this._angleTargets[i].set(
                 Math.cos(phase * 0.73) * amplitude * 0.35,
+                0,
+                -Math.sin(phase) * amplitude,
             );
-            stepCageSpring(this._offsets[i], this._velocities[i], this._targets[i], this._springSettings, dt);
+            stepCageSpring(
+                this._bendAngles[i],
+                this._angularVelocities[i],
+                this._angleTargets[i],
+                this._springSettings,
+                dt,
+            );
         }
 
+        this._updateHierarchy();
         this._uploadControls();
         if (this.debugDraw) this._drawDebug();
     }
@@ -158,25 +173,26 @@ export class CageDeformer extends Component {
         Vec3.normalize(_localDirection, _localDirection);
 
         for (let i = 1; i < this._controlCount; ++i) {
-            Vec3.add(_localPoint, this._restControls[i], this._offsets[i]);
-            Vec3.transformMat4(_worldControl, _localPoint, this.node.worldMatrix);
+            Vec3.transformMat4(_worldControl, this._globalPositions[i], this.node.worldMatrix);
             const distance = Vec3.distance(_worldControl, worldPosition);
             if (distance >= radius) continue;
             const falloff = 1 - distance / radius;
-            const height = i / (this._controlCount - 1);
-            const impulse = strength * falloff * height;
-            this._velocities[i].x += _localDirection.x * impulse;
-            this._velocities[i].y += _localDirection.y * impulse;
-            this._velocities[i].z += _localDirection.z * impulse;
+            const height = this._normalizedControlHeight(i);
+            const impulse = strength * falloff * Math.max(0.15, height);
+
+            // Rotation around Z bends along X; rotation around X bends along Z.
+            this._angularVelocities[i].x += _localDirection.z * impulse;
+            this._angularVelocities[i].z -= _localDirection.x * impulse;
         }
     }
 
     public resetDeformation(): void {
         for (let i = 0; i < this._controlCount; ++i) {
-            this._offsets[i].set(0, 0, 0);
-            this._velocities[i].set(0, 0, 0);
-            this._targets[i].set(0, 0, 0);
+            this._bendAngles[i].set(0, 0, 0);
+            this._angularVelocities[i].set(0, 0, 0);
+            this._angleTargets[i].set(0, 0, 0);
         }
+        this._updateHierarchy();
         this._uploadControls();
     }
 
@@ -187,28 +203,39 @@ export class CageDeformer extends Component {
         this._cageMesh = getCageMesh(this._sourceMesh, count);
         this._renderer.mesh = this._cageMesh;
 
-        this._offsets.length = count;
-        this._velocities.length = count;
-        this._targets.length = count;
-        this._restControls.length = count;
-        this._uniformOffsets.length = MAX_CAGE_CONTROLS;
+        const layout = buildDefaultCageLayout(this._sourceMesh, count);
+        this._parents = layout.parents.slice();
 
-        const min = this._sourceMesh.struct.minPosition ?? Vec3.ZERO;
-        const max = this._sourceMesh.struct.maxPosition ?? Vec3.ONE;
-        const centerX = (min.x + max.x) * 0.5;
-        const centerZ = (min.z + max.z) * 0.5;
+        this._restControls.length = count;
+        this._bendAngles.length = count;
+        this._angularVelocities.length = count;
+        this._angleTargets.length = count;
+        this._globalPositions.length = count;
+        this._globalRotations.length = count;
+
         for (let i = 0; i < count; ++i) {
-            this._offsets[i] = this._offsets[i] || new Vec3();
-            this._velocities[i] = this._velocities[i] || new Vec3();
-            this._targets[i] = this._targets[i] || new Vec3();
             this._restControls[i] = this._restControls[i] || new Vec3();
-            const t = i / (count - 1);
-            this._restControls[i].set(centerX, min.y + (max.y - min.y) * t, centerZ);
+            this._restControls[i].set(layout.positions[i]);
+            this._bendAngles[i] = this._bendAngles[i] || new Vec3();
+            this._angularVelocities[i] = this._angularVelocities[i] || new Vec3();
+            this._angleTargets[i] = this._angleTargets[i] || new Vec3();
+            this._globalPositions[i] = this._globalPositions[i] || new Vec3();
+            this._globalRotations[i] = this._globalRotations[i] || new Quat();
+            this._bendAngles[i].set(0, 0, 0);
+            this._angularVelocities[i].set(0, 0, 0);
+            this._angleTargets[i].set(0, 0, 0);
         }
+
+        this._uniformRest.length = MAX_CAGE_CONTROLS;
+        this._uniformOffsets.length = MAX_CAGE_CONTROLS;
+        this._uniformRotations.length = MAX_CAGE_CONTROLS;
         for (let i = 0; i < MAX_CAGE_CONTROLS; ++i) {
+            this._uniformRest[i] = this._uniformRest[i] || new Vec4();
             this._uniformOffsets[i] = this._uniformOffsets[i] || new Vec4();
-            this._uniformOffsets[i].set(0, 0, 0, 0);
+            this._uniformRotations[i] = this._uniformRotations[i] || new Vec4(0, 0, 0, 1);
         }
+
+        this._updateHierarchy();
 
         this._materialInstances.length = 0;
         const materials = this._renderer.sharedMaterials;
@@ -223,20 +250,53 @@ export class CageDeformer extends Component {
         this._uploadControls();
     }
 
+    private _updateHierarchy(): void {
+        for (let i = 0; i < this._controlCount; ++i) {
+            Quat.identity(_localRotation);
+            Quat.rotateX(_localRotation, _localRotation, this._bendAngles[i].x);
+            Quat.rotateZ(_localRotation, _localRotation, this._bendAngles[i].z);
+
+            const parent = this._parents[i];
+            if (parent < 0) {
+                this._globalPositions[i].set(this._restControls[i]);
+                Quat.copy(this._globalRotations[i], _localRotation);
+                continue;
+            }
+
+            Vec3.subtract(_restDelta, this._restControls[i], this._restControls[parent]);
+            Vec3.transformQuat(_rotatedDelta, _restDelta, this._globalRotations[parent]);
+            Vec3.add(this._globalPositions[i], this._globalPositions[parent], _rotatedDelta);
+            Quat.multiply(this._globalRotations[i], this._globalRotations[parent], _localRotation);
+            Quat.normalize(this._globalRotations[i], this._globalRotations[i]);
+        }
+    }
+
     private _uploadControls(): void {
         for (let i = 0; i < MAX_CAGE_CONTROLS; ++i) {
-            const source = i < this._controlCount ? this._offsets[i] : Vec3.ZERO;
-            this._uniformOffsets[i].set(source.x, source.y, source.z, 0);
+            if (i < this._controlCount) {
+                const rest = this._restControls[i];
+                const current = this._globalPositions[i];
+                const rotation = this._globalRotations[i];
+                this._uniformRest[i].set(rest.x, rest.y, rest.z, 0);
+                this._uniformOffsets[i].set(current.x - rest.x, current.y - rest.y, current.z - rest.z, 0);
+                this._uniformRotations[i].set(rotation.x, rotation.y, rotation.z, rotation.w);
+            } else {
+                this._uniformRest[i].set(0, 0, 0, 0);
+                this._uniformOffsets[i].set(0, 0, 0, 0);
+                this._uniformRotations[i].set(0, 0, 0, 1);
+            }
         }
 
         for (const material of this._materialInstances) {
             if (!material) continue;
-            const passes = material.passes;
-            for (let passIndex = 0; passIndex < passes.length; ++passIndex) {
-                const pass = passes[passIndex];
+            for (const pass of material.passes) {
                 for (let i = 0; i < MAX_CAGE_CONTROLS; ++i) {
-                    const handle = pass.getHandle(`cageOffset${i}`);
+                    let handle = pass.getHandle(`cageRest${i}`);
+                    if (handle) pass.setUniform(handle, this._uniformRest[i]);
+                    handle = pass.getHandle(`cageOffset${i}`);
                     if (handle) pass.setUniform(handle, this._uniformOffsets[i]);
+                    handle = pass.getHandle(`cageRotation${i}`);
+                    if (handle) pass.setUniform(handle, this._uniformRotations[i]);
                 }
                 const paramsHandle = pass.getHandle('cageParams');
                 if (paramsHandle) {
@@ -247,19 +307,26 @@ export class CageDeformer extends Component {
         }
     }
 
+    private _normalizedControlHeight(index: number): number {
+        if (!this._restControls.length) return 0;
+        const rootY = this._restControls[0].y;
+        let topY = rootY + 1;
+        for (let i = 1; i < this._restControls.length; ++i) topY = Math.max(topY, this._restControls[i].y);
+        return Math.max(0, Math.min(1, (this._restControls[index].y - rootY) / Math.max(1e-6, topY - rootY)));
+    }
+
     private _drawDebug(): void {
         const root = cclegacy.director.root as any;
         const geometryRenderer = root?.pipeline?.geometryRenderer;
         if (!geometryRenderer) return;
-        const color = DEBUG_COLOR;
+
         for (let i = 0; i < this._controlCount; ++i) {
-            Vec3.add(_localPoint, this._restControls[i], this._offsets[i]);
-            Vec3.transformMat4(_worldControl, _localPoint, this.node.worldMatrix);
-            geometryRenderer.addCross(_worldControl, 0.08, color, true);
-            if (i > 0) {
-                Vec3.add(_localPoint, this._restControls[i - 1], this._offsets[i - 1]);
-                Vec3.transformMat4(_debugPrevious, _localPoint, this.node.worldMatrix);
-                geometryRenderer.addLine(_debugPrevious, _worldControl, color, true);
+            Vec3.transformMat4(_worldControl, this._globalPositions[i], this.node.worldMatrix);
+            geometryRenderer.addCross(_worldControl, 0.08, DEBUG_COLOR, true);
+            const parent = this._parents[i];
+            if (parent >= 0) {
+                Vec3.transformMat4(_debugPrevious, this._globalPositions[parent], this.node.worldMatrix);
+                geometryRenderer.addLine(_debugPrevious, _worldControl, DEBUG_COLOR, true);
             }
         }
     }
