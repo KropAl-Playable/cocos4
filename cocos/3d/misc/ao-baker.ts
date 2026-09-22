@@ -297,63 +297,137 @@ function cloneStaticMeshWithAO (
 ): Mesh {
     if (source.struct.dynamic) throw new Error('AO Baker v0.1 supports static meshes only.');
     if (source.struct.morph) throw new Error('AO Baker v0.1 does not support morph meshes.');
+    if (source.struct.cluster || source.struct.primitives.some((primitive) => primitive.cluster)) {
+        throw new Error('AO Baker v0.1 does not support clustered meshes.');
+    }
+    if (source.struct.compressed || source.struct.encoded || source.struct.quantized) {
+        throw new Error('AO Baker requires an initialized/decompressed mesh.');
+    }
 
     const originalStruct = source.struct;
-    const vertexBundles = originalStruct.vertexBundles.map((bundle) => ({
-        view: { ...bundle.view },
-        attributes: bundle.attributes.map((attribute) => new Attribute(
+    const primitives = originalStruct.primitives.map((primitive) => ({
+        ...primitive,
+        vertexBundelIndices: primitive.vertexBundelIndices.slice(),
+        indexView: primitive.indexView ? { ...primitive.indexView } : undefined,
+        cluster: undefined,
+    }));
+
+    const aoByBundle = new Map<number, Float32Array>();
+    for (let primitiveIndex = 0; primitiveIndex < primitives.length; ++primitiveIndex) {
+        const primitive = primitives[primitiveIndex];
+        if (primitive.vertexBundelIndices.length === 0) {
+            throw new Error(`AO Baker found no vertex bundle on primitive ${primitiveIndex}.`);
+        }
+        const primaryBundleIndex = primitive.vertexBundelIndices[0];
+        const primaryBundle = originalStruct.vertexBundles[primaryBundleIndex];
+        if (primaryBundle.attributes.some((attribute) => attribute.name === AttributeName.ATTR_COLOR)) {
+            throw new Error('AO Baker v0.1 cannot bake into a mesh that already contains ATTR_COLOR.');
+        }
+
+        const ao = values[primitiveIndex];
+        if (ao.length !== primaryBundle.view.count) {
+            throw new Error(`AO Baker vertex count mismatch on primitive ${primitiveIndex}.`);
+        }
+
+        const existing = aoByBundle.get(primaryBundleIndex);
+        if (existing) {
+            if (existing.length !== ao.length) throw new Error('Shared vertex bundle has incompatible AO data.');
+            for (let i = 0; i < ao.length; ++i) {
+                if (Math.abs(existing[i] - ao[i]) > 1e-5) {
+                    throw new Error('Shared vertex bundle produced different AO values across primitives.');
+                }
+            }
+        } else {
+            aoByBundle.set(primaryBundleIndex, ao);
+        }
+    }
+
+    const vertexBundles: Mesh.IVertexBundle[] = [];
+    const vertexChunks: Uint8Array[] = [];
+    let totalBytes = 0;
+    const targetChannel = channelIndex(channel);
+
+    for (let bundleIndex = 0; bundleIndex < originalStruct.vertexBundles.length; ++bundleIndex) {
+        const sourceBundle = originalStruct.vertexBundles[bundleIndex];
+        const sourceBytes = new Uint8Array(
+            source.data.buffer,
+            source.data.byteOffset + sourceBundle.view.offset,
+            sourceBundle.view.length,
+        );
+        const attributes = sourceBundle.attributes.map((attribute) => new Attribute(
             attribute.name,
             attribute.format,
             attribute.isNormalized,
             attribute.stream,
             attribute.isInstanced,
             attribute.location,
-        )),
-    }));
-    const primitives = originalStruct.primitives.map((primitive) => ({
-        ...primitive,
-        vertexBundelIndices: primitive.vertexBundelIndices.slice(),
-        indexView: primitive.indexView ? { ...primitive.indexView } : undefined,
-        cluster: primitive.cluster,
-    }));
+        ));
 
-    for (let primitiveIndex = 0; primitiveIndex < primitives.length; ++primitiveIndex) {
-        const primitive = primitives[primitiveIndex];
-        for (let i = 0; i < primitive.vertexBundelIndices.length; ++i) {
-            const bundle = vertexBundles[primitive.vertexBundelIndices[i]];
-            if (bundle.attributes.some((attribute) => attribute.name === AttributeName.ATTR_COLOR)) {
-                throw new Error('AO Baker v0.1 cannot bake into a mesh that already contains ATTR_COLOR. Use a mesh without vertex colors for this prototype.');
+        const ao = aoByBundle.get(bundleIndex);
+        let chunk: Uint8Array;
+        let stride = sourceBundle.view.stride;
+        if (ao) {
+            const sourceStride = sourceBundle.view.stride;
+            stride = sourceStride + 4;
+            chunk = new Uint8Array(sourceBundle.view.count * stride);
+            for (let vertexIndex = 0; vertexIndex < sourceBundle.view.count; ++vertexIndex) {
+                const srcOffset = vertexIndex * sourceStride;
+                const dstOffset = vertexIndex * stride;
+                chunk.set(sourceBytes.subarray(srcOffset, srcOffset + sourceStride), dstOffset);
+                chunk[dstOffset + sourceStride] = 255;
+                chunk[dstOffset + sourceStride + 1] = 255;
+                chunk[dstOffset + sourceStride + 2] = 255;
+                chunk[dstOffset + sourceStride + 3] = 255;
+                chunk[dstOffset + sourceStride + targetChannel] = Math.round(
+                    Math.max(0, Math.min(1, ao[vertexIndex])) * 255,
+                );
             }
-        }
-    }
-
-    let appendBytes = 0;
-    for (let i = 0; i < values.length; ++i) appendBytes += values[i].length * 4;
-    const data = new Uint8Array(source.data.byteLength + appendBytes);
-    data.set(source.data);
-
-    const targetChannel = channelIndex(channel);
-    let offset = source.data.byteLength;
-    for (let primitiveIndex = 0; primitiveIndex < primitives.length; ++primitiveIndex) {
-        const ao = values[primitiveIndex];
-        const colorData = new Uint8Array(data.buffer, offset, ao.length * 4);
-        colorData.fill(255);
-        for (let vertexIndex = 0; vertexIndex < ao.length; ++vertexIndex) {
-            colorData[vertexIndex * 4 + targetChannel] = Math.round(Math.max(0, Math.min(1, ao[vertexIndex])) * 255);
+            attributes.push(new Attribute(AttributeName.ATTR_COLOR, Format.RGBA8, true));
+        } else {
+            chunk = new Uint8Array(sourceBytes);
         }
 
-        const colorBundleIndex = vertexBundles.length;
         vertexBundles.push({
             view: {
-                offset,
-                length: colorData.byteLength,
-                count: ao.length,
-                stride: 4,
+                offset: totalBytes,
+                length: chunk.byteLength,
+                count: sourceBundle.view.count,
+                stride,
             },
-            attributes: [new Attribute(AttributeName.ATTR_COLOR, Format.RGBA8, true)],
+            attributes,
         });
-        primitives[primitiveIndex].vertexBundelIndices.push(colorBundleIndex);
-        offset += colorData.byteLength;
+        vertexChunks.push(chunk);
+        totalBytes += chunk.byteLength;
+    }
+
+    const indexChunks: Uint8Array[] = [];
+    for (let primitiveIndex = 0; primitiveIndex < primitives.length; ++primitiveIndex) {
+        const sourceIndexView = originalStruct.primitives[primitiveIndex].indexView;
+        if (!sourceIndexView) continue;
+        const chunk = new Uint8Array(
+            source.data.buffer,
+            source.data.byteOffset + sourceIndexView.offset,
+            sourceIndexView.length,
+        ).slice();
+        primitives[primitiveIndex].indexView = {
+            offset: totalBytes,
+            length: sourceIndexView.length,
+            count: sourceIndexView.count,
+            stride: sourceIndexView.stride,
+        };
+        indexChunks.push(chunk);
+        totalBytes += chunk.byteLength;
+    }
+
+    const data = new Uint8Array(totalBytes);
+    let writeOffset = 0;
+    for (let i = 0; i < vertexChunks.length; ++i) {
+        data.set(vertexChunks[i], writeOffset);
+        writeOffset += vertexChunks[i].byteLength;
+    }
+    for (let i = 0; i < indexChunks.length; ++i) {
+        data.set(indexChunks[i], writeOffset);
+        writeOffset += indexChunks[i].byteLength;
     }
 
     const mesh = new Mesh(source.name ? `${source.name}-ao` : 'ao-baked-mesh');
@@ -361,13 +435,17 @@ function cloneStaticMeshWithAO (
         struct: {
             vertexBundles,
             primitives,
-            minPosition: originalStruct.minPosition ? new Vec3(originalStruct.minPosition.x, originalStruct.minPosition.y, originalStruct.minPosition.z) : undefined,
-            maxPosition: originalStruct.maxPosition ? new Vec3(originalStruct.maxPosition.x, originalStruct.maxPosition.y, originalStruct.maxPosition.z) : undefined,
+            minPosition: originalStruct.minPosition
+                ? new Vec3(originalStruct.minPosition.x, originalStruct.minPosition.y, originalStruct.minPosition.z)
+                : undefined,
+            maxPosition: originalStruct.maxPosition
+                ? new Vec3(originalStruct.maxPosition.x, originalStruct.maxPosition.y, originalStruct.maxPosition.z)
+                : undefined,
             jointMaps: originalStruct.jointMaps?.map((map) => map.slice()),
             quantized: false,
             encoded: false,
             compressed: false,
-            cluster: originalStruct.cluster,
+            cluster: false,
         },
         data,
     });
