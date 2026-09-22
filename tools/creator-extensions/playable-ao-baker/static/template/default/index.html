@@ -1,6 +1,6 @@
 <div class="root">
     <h2>Playable AO Baker</h2>
-    <div class="hint">Select one or more nodes with MeshRenderer components.</div>
+    <div class="hint">Select one or more nodes with MeshRenderer components. Preview temporarily replaces their materials with an AO-only debug material.</div>
 
     <section>
         <div class="section-title">Selection</div>
@@ -40,7 +40,7 @@
         <label>Output directory
             <input id="output" class="wide" value="db://assets" title="Use an existing AssetDB directory.">
         </label>
-        <div class="hint">Bake creates a new <code>.mesh</code> asset and assigns it to the selected renderer.</div>
+        <div class="hint">Bake exports a compact <code>.glb</code>, lets Creator import its Mesh sub-asset, then assigns that Mesh to the selected renderer.</div>
     </section>
 
     <div class="actions">
