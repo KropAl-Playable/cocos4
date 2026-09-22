@@ -24,5 +24,6 @@
 */
 
 export { MeshRenderer } from './mesh-renderer';
+export { CageDeformer } from './cage-deformer';
 /** deprecated */
 export * from './deprecated';
