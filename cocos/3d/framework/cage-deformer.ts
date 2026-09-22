@@ -1,3 +1,4 @@
+import { EDITOR } from 'internal:constants';
 /*
  Copyright (c) 2017-2023 Xiamen Yaji Software Co., Ltd.
 
@@ -81,6 +82,9 @@ export class CageDeformer extends Component {
     public flutterFrequency = 5;
 
     @property({ type: CCBoolean })
+    public previewInEditor = false;
+
+    @property({ type: CCBoolean })
     public debugDraw = false;
 
     private _renderer: MeshRenderer | null = null;
@@ -112,6 +116,7 @@ export class CageDeformer extends Component {
     }
 
     protected update(dt: number): void {
+        if (EDITOR && !this.previewInEditor) return;
         if (!this._renderer || !this._cageMesh || this._controlCount < 2) return;
         this._time += Math.max(0, Math.min(dt, 0.05));
 
