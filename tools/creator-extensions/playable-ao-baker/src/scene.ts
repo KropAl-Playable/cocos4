@@ -187,8 +187,16 @@ function positionBounds(data: Float32Array): { min: number[]; max: number[] } {
     return { min, max };
 }
 
+const ATTRIBUTE = {
+    POSITION: 'a_position',
+    NORMAL: 'a_normal',
+    TANGENT: 'a_tangent',
+    TEXCOORD0: 'a_texCoord',
+    TEXCOORD1: 'a_texCoord1',
+    COLOR0: 'a_color',
+} as const;
+
 function exportMeshToGLB(mesh: Mesh): Buffer {
-    const { AttributeName } = engine();
     const accessors: GLTFAccessor[] = [];
     const bufferViews: GLTFBufferView[] = [];
     const binaryParts: Buffer[] = [];
@@ -257,8 +265,8 @@ function exportMeshToGLB(mesh: Mesh): Buffer {
     };
 
     for (let primitiveIndex = 0; primitiveIndex < mesh.struct.primitives.length; ++primitiveIndex) {
-        const positionsRaw = mesh.readAttribute(primitiveIndex, AttributeName.ATTR_POSITION);
-        const normalsRaw = mesh.readAttribute(primitiveIndex, AttributeName.ATTR_NORMAL);
+        const positionsRaw = mesh.readAttribute(primitiveIndex, ATTRIBUTE.POSITION as any);
+        const normalsRaw = mesh.readAttribute(primitiveIndex, ATTRIBUTE.NORMAL as any);
         if (!positionsRaw || !normalsRaw) {
             throw new Error(`GLB export requires POSITION and NORMAL on primitive ${primitiveIndex}.`);
         }
@@ -272,11 +280,11 @@ function exportMeshToGLB(mesh: Mesh): Buffer {
             NORMAL: append(normals, 5126, Math.floor(normals.length / 3), 'VEC3', 34962),
         };
 
-        addFloatAttribute(primitiveIndex, AttributeName.ATTR_TANGENT, 'TANGENT', 4, attributes);
-        addFloatAttribute(primitiveIndex, AttributeName.ATTR_TEX_COORD, 'TEXCOORD_0', 2, attributes);
-        addFloatAttribute(primitiveIndex, AttributeName.ATTR_TEX_COORD1, 'TEXCOORD_1', 2, attributes);
+        addFloatAttribute(primitiveIndex, ATTRIBUTE.TANGENT as any, 'TANGENT', 4, attributes);
+        addFloatAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD0 as any, 'TEXCOORD_0', 2, attributes);
+        addFloatAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD1 as any, 'TEXCOORD_1', 2, attributes);
 
-        const colors = mesh.readAttribute(primitiveIndex, AttributeName.ATTR_COLOR);
+        const colors = mesh.readAttribute(primitiveIndex, ATTRIBUTE.COLOR0 as any);
         if (colors) {
             const colorCount = Math.floor(colors.length / 4);
             if (colors instanceof Uint8Array) {
