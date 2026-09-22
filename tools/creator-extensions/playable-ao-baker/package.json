@@ -13,10 +13,10 @@
       "type": "dockable",
       "main": "./dist/panels/default/index.js",
       "size": {
-        "min-width": 320,
-        "min-height": 520,
-        "width": 380,
-        "height": 640
+        "min-width": 260,
+        "min-height": 340,
+        "width": 360,
+        "height": 560
       }
     }
   },
