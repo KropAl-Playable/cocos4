@@ -101,4 +101,28 @@ describe('AO Baker', () => {
             expect(colors[i * 4 + 3]).toBe(255);
         }
     });
+    test('RGB debug channel mirrors AO into all color channels', () => {
+        const source = createPlaneMesh(0, 0.5);
+        const ceiling = createPlaneMesh(0.1, 100);
+        const result = bakeMeshAmbientOcclusion(
+            { mesh: source },
+            [{ mesh: ceiling }],
+            {
+                sampleCount: 16,
+                maxDistance: 1,
+                selfOcclusion: false,
+                sceneOccluders: true,
+                channel: 'rgb',
+            },
+        );
+
+        const colors = result.mesh.readAttribute(0, AttributeName.ATTR_COLOR) as Uint8Array;
+        for (let i = 0; i < 4; ++i) {
+            const base = i * 4;
+            expect(colors[base]).toBe(colors[base + 1]);
+            expect(colors[base + 1]).toBe(colors[base + 2]);
+            expect(colors[base + 3]).toBe(255);
+        }
+    });
+
 });
