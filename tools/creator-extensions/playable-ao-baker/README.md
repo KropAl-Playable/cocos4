@@ -11,7 +11,7 @@ Editor extension for the AO Baker implemented in the custom COCOS 4 fork.
 The engine exposes the editor-only module:
 
 ```
-cc/editor/ao-baker
+cc/editor/serialization
 ```
 
 The extension deliberately calls it only from the **scene script**. The main extension process and panel do not import `cc`.
