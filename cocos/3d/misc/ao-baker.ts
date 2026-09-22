@@ -15,7 +15,7 @@
 */
 
 import { Mat4, Vec3 } from '../../core';
-import { Attribute, AttributeName, Format, PrimitiveMode } from '../../gfx';
+import { Attribute, AttributeName, Format, FormatInfos, PrimitiveMode } from '../../gfx';
 import { Mesh } from '../assets/mesh';
 
 export type AOVertexColorChannel = 'r' | 'g' | 'b' | 'a';
@@ -318,11 +318,15 @@ function cloneStaticMeshWithAO (
         if (primitive.vertexBundelIndices.length === 0) {
             throw new Error(`AO Baker found no vertex bundle on primitive ${primitiveIndex}.`);
         }
+        for (let bundleRefIndex = 0; bundleRefIndex < primitive.vertexBundelIndices.length; ++bundleRefIndex) {
+            const referencedBundle = originalStruct.vertexBundles[primitive.vertexBundelIndices[bundleRefIndex]];
+            if (referencedBundle.attributes.some((attribute) => attribute.name === AttributeName.ATTR_COLOR)) {
+                throw new Error('AO Baker v0.1 cannot bake into a mesh that already contains ATTR_COLOR.');
+            }
+        }
+
         const primaryBundleIndex = primitive.vertexBundelIndices[0];
         const primaryBundle = originalStruct.vertexBundles[primaryBundleIndex];
-        if (primaryBundle.attributes.some((attribute) => attribute.name === AttributeName.ATTR_COLOR)) {
-            throw new Error('AO Baker v0.1 cannot bake into a mesh that already contains ATTR_COLOR.');
-        }
 
         const ao = values[primitiveIndex];
         if (ao.length !== primaryBundle.view.count) {
@@ -367,6 +371,16 @@ function cloneStaticMeshWithAO (
         let chunk: Uint8Array;
         let stride = sourceBundle.view.stride;
         if (ao) {
+            let packedStride = 0;
+            for (let attributeIndex = 0; attributeIndex < sourceBundle.attributes.length; ++attributeIndex) {
+                packedStride += FormatInfos[sourceBundle.attributes[attributeIndex].format].size;
+            }
+            if (packedStride !== sourceBundle.view.stride) {
+                throw new Error(
+                    `AO Baker v0.1 requires tightly packed primary vertex buffers (bundle ${bundleIndex}: packed=${packedStride}, stride=${sourceBundle.view.stride}).`,
+                );
+            }
+
             const sourceStride = sourceBundle.view.stride;
             stride = sourceStride + 4;
             chunk = new Uint8Array(sourceBundle.view.count * stride);
