@@ -10,10 +10,11 @@ interface BakeOptions {
     sceneOccluders: boolean;
     doubleSided: boolean;
     channel: 'r' | 'g' | 'b' | 'a';
+    sharingMode: 'auto' | 'shared-source' | 'per-instance';
 }
 
 interface ExportedBake {
-    nodeUuid: string;
+    nodeUuids: string[];
     nodeName: string;
     glbBase64: string;
     stats: {
@@ -93,10 +94,35 @@ export const methods: Record<string, (...args: any[]) => any> = {
         if (!uuids.length) throw new Error('Select at least one node with a MeshRenderer.');
 
         const directory = (outputDirectory || 'db://assets').replace(/\/$/, '');
-        const baked = await executeScene('exportBakedMeshes', [uuids, options]) as ExportedBake[];
-        const created: Array<{ nodeUuid: string; url: string; uuid: string; stats: ExportedBake['stats'] }> = [];
+        const sharingMode = options.sharingMode || 'auto';
+        const sceneMode = sharingMode === 'shared-source' ? 'shared-source' : 'per-instance';
+        const baked = await executeScene('exportBakedMeshes', [uuids, options, sceneMode]) as ExportedBake[];
+
+        const created: Array<{
+            nodeUuids: string[];
+            url: string;
+            uuid: string;
+            stats: ExportedBake['stats'];
+            reused: boolean;
+        }> = [];
+
+        // Automatic exact-content dedupe is safe even in per-instance mode.
+        // If two AO results are byte-identical, import only one GLB and share its Mesh.
+        const importedByGLB = new Map<string, { url: string; uuid: string }>();
 
         for (const item of baked) {
+            const cached = sharingMode !== 'per-instance' ? importedByGLB.get(item.glbBase64) : undefined;
+            if (cached) {
+                created.push({
+                    nodeUuids: item.nodeUuids,
+                    url: cached.url,
+                    uuid: cached.uuid,
+                    stats: item.stats,
+                    reused: true,
+                });
+                continue;
+            }
+
             const requestedUrl = `${directory}/${sanitizeAssetName(item.nodeName)}-ao.glb`;
             const url = await Editor.Message.request('asset-db', 'generate-available-url', requestedUrl);
             const glb = Buffer.from(item.glbBase64, 'base64');
@@ -104,20 +130,30 @@ export const methods: Record<string, (...args: any[]) => any> = {
             if (!info) throw new Error(`Asset DB failed to create ${url}`);
 
             const mesh = findMeshSubAsset(info as AssetInfoLike) || await queryImportedMesh(url);
+            importedByGLB.set(item.glbBase64, { url, uuid: mesh.uuid });
             created.push({
-                nodeUuid: item.nodeUuid,
+                nodeUuids: item.nodeUuids,
                 url,
                 uuid: mesh.uuid,
                 stats: item.stats,
+                reused: false,
             });
         }
 
-        await executeScene('assignBakedAssets', [created.map((item) => ({
-            nodeUuid: item.nodeUuid,
-            assetUuid: item.uuid,
-        }))]);
+        const assignments: Array<{ nodeUuid: string; assetUuid: string }> = [];
+        for (const item of created) {
+            for (const nodeUuid of item.nodeUuids) {
+                assignments.push({ nodeUuid, assetUuid: item.uuid });
+            }
+        }
+        await executeScene('assignBakedAssets', [assignments]);
 
-        return created;
+        return {
+            assets: created,
+            assignedCount: assignments.length,
+            uniqueAssetCount: new Set(created.map((item) => item.uuid)).size,
+            sharingMode,
+        };
     },
 };
 
