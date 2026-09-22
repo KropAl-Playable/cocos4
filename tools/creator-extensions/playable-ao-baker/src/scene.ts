@@ -3,7 +3,7 @@ import { join } from 'path';
 module.paths.push(join(Editor.App.path, 'node_modules'));
 
 import type { Mesh, MeshRenderer, Node } from 'cc';
-import type { IAOBakeOptions, IAOBakeStats, IAOBakeTarget } from 'cc/editor/ao-baker';
+import type { IAOBakeOptions, IAOBakeStats, IAOBakeTarget } from 'cc/editor/serialization';
 
 interface PreviewEntry {
     renderer: MeshRenderer;
@@ -24,8 +24,8 @@ function engine(): typeof import('cc') {
     return require('cc') as typeof import('cc');
 }
 
-function baker(): typeof import('cc/editor/ao-baker') {
-    return require('cc/editor/ao-baker') as typeof import('cc/editor/ao-baker');
+function baker(): typeof import('cc/editor/serialization') {
+    return require('cc/editor/serialization') as typeof import('cc/editor/serialization');
 }
 
 function findNode(root: Node, uuid: string): Node | null {
