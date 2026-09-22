@@ -47,7 +47,7 @@
         <label>Output directory
             <input id="output" class="wide" value="db://assets" title="Use an existing AssetDB directory.">
         </label>
-        <div class="hint">Auto reuses byte-identical AO results. Shared by source mesh bakes one mesh per original source mesh and disables Scene Occluders, preserving instancing/reuse. Per instance keeps unique environment-dependent AO.</div>
+        <div class="hint">Auto reuses byte-identical AO results. Shared by source mesh averages AO across all selected instances that use the same source mesh, preserving one mesh asset while retaining approximate scene occlusion. Per instance keeps unique environment-dependent AO.</div>
     </section>
 
     <div class="actions">
