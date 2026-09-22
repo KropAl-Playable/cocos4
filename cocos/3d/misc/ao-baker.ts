@@ -378,7 +378,7 @@ function isOccluded (
     return false;
 }
 
-function cloneStaticMeshWithAO (
+export function createMeshWithAmbientOcclusionValues (
     source: Mesh,
     values: readonly Float32Array[],
     channel: AOVertexColorChannel,
@@ -661,7 +661,7 @@ export function bakeMeshAmbientOcclusion (
         }
     }
 
-    const mesh = cloneStaticMeshWithAO(target.mesh, values, options.channel);
+    const mesh = createMeshWithAmbientOcclusionValues(target.mesh, values, options.channel);
     return {
         mesh,
         values,
