@@ -13,6 +13,7 @@ describe('Cage Deform', () => {
             new Vec3(0, 4, 1),
         ],
         parents: [-1, 0, 1, 2, 3, 3, 3],
+        trunkCount: 4,
     };
 
     test('encodes four normalized spatial influences into two RGBA8 attributes', () => {
