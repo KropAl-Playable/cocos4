@@ -22,7 +22,7 @@ export type AOVertexColorChannel = 'r' | 'g' | 'b' | 'a';
 
 export interface IAOBakeTarget {
     mesh: Mesh;
-    worldMatrix?: Readonly<Mat4>;
+    worldMatrix?: Mat4;
 }
 
 export interface IAOBakeOptions {
@@ -127,13 +127,13 @@ function channelIndex (channel: AOVertexColorChannel): number {
     }
 }
 
-function transformPoint (out: Vec3, x: number, y: number, z: number, matrix?: Readonly<Mat4>): Vec3 {
+function transformPoint (out: Vec3, x: number, y: number, z: number, matrix?: Mat4): Vec3 {
     Vec3.set(out, x, y, z);
     if (matrix) Vec3.transformMat4(out, out, matrix);
     return out;
 }
 
-function transformNormal (out: Vec3, x: number, y: number, z: number, matrix?: Readonly<Mat4>): Vec3 {
+function transformNormal (out: Vec3, x: number, y: number, z: number, matrix?: Mat4): Vec3 {
     Vec3.set(out, x, y, z);
     if (matrix) Vec3.transformMat4Normal(out, out, matrix);
     Vec3.normalize(out, out);
@@ -145,7 +145,7 @@ function makeTriangle (
     i0: number,
     i1: number,
     i2: number,
-    matrix?: Readonly<Mat4>,
+    matrix?: Mat4,
 ): ITriangle {
     transformPoint(_position, positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2], matrix);
     const ax = _position.x; const ay = _position.y; const az = _position.z;
@@ -455,10 +455,10 @@ function cloneStaticMeshWithAO (
 /**
  * Offline/editor-oriented ambient-occlusion baker for static triangle meshes.
  *
- * The returned mesh is a clone with one compact RGBA8 vertex-color stream per
- * primitive. Only the selected channel is replaced with AO; the other channels
- * default to 1.0. v0.1 deliberately refuses meshes that already contain vertex
- * colors so imported source assets are never modified or silently corrupted.
+ * The returned mesh is a clone whose primary vertex stream is expanded by a
+ * compact RGBA8 color attribute. Only the selected channel stores AO; the other
+ * channels default to 1.0. v0.1 deliberately refuses meshes that already contain
+ * vertex colors so imported source assets are never modified or silently corrupted.
  */
 export function bakeMeshAmbientOcclusion (
     target: IAOBakeTarget,
@@ -482,8 +482,7 @@ export function bakeMeshAmbientOcclusion (
     for (let primitiveIndex = 0; primitiveIndex < target.mesh.struct.primitives.length; ++primitiveIndex) {
         const primitive = target.mesh.struct.primitives[primitiveIndex];
         if (primitive.primitiveMode !== PrimitiveMode.TRIANGLE_LIST) {
-            values.push(new Float32Array());
-            continue;
+            throw new Error(`AO Baker v0.1 supports TRIANGLE_LIST primitives only (primitive ${primitiveIndex}).`);
         }
 
         const positionData = target.mesh.readAttribute(primitiveIndex, AttributeName.ATTR_POSITION);
