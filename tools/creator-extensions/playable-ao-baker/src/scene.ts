@@ -404,13 +404,7 @@ export const methods = {
             const selected = selectedTargets(uuids);
             if (!selected.length) throw new Error('Selection contains no MeshRenderer with a Mesh.');
 
-            // A single baked mesh can only be safely shared when AO is independent
-            // from per-instance surroundings. Force scene occluders off here.
-            const sharedOptions: IAOBakeOptions = {
-                ...options,
-                sceneOccluders: false,
-            };
-            const { bakeMeshAmbientOcclusion } = baker();
+            const { bakeMeshAmbientOcclusion, createMeshWithAmbientOcclusionValues } = baker();
             const groups = new Map<Mesh, typeof selected>();
 
             for (const item of selected) {
@@ -423,15 +417,76 @@ export const methods = {
             const output: ExportedBake[] = [];
             for (const group of groups.values()) {
                 const representative = group[0];
-                // Shared AO is baked in mesh-local space so every instance can reuse
-                // the exact same output regardless of translation/rotation/scale.
-                const result = bakeMeshAmbientOcclusion({ mesh: representative.target.mesh }, [], sharedOptions);
+                let averagedValues: Float32Array[] | null = null;
+                let rayCount = 0;
+                let durationMs = 0;
+
+                // Bake every selected instance in its real scene position, then average
+                // per-vertex AO back into one shared mesh. This preserves source-mesh
+                // reuse while retaining a stable approximation of environment AO.
+                for (const item of group) {
+                    const occluders = options.sceneOccluders
+                        ? sceneOccluders(new Set([item.node.uuid]))
+                        : [];
+                    const result = bakeMeshAmbientOcclusion(item.target, occluders, options);
+
+                    if (!averagedValues) {
+                        averagedValues = result.values.map((values) => new Float32Array(values.length));
+                    }
+                    for (let primitiveIndex = 0; primitiveIndex < result.values.length; ++primitiveIndex) {
+                        const src = result.values[primitiveIndex];
+                        const dst = averagedValues[primitiveIndex];
+                        if (src.length !== dst.length) {
+                            result.mesh.destroy();
+                            throw new Error('Shared source mesh produced incompatible AO vertex counts.');
+                        }
+                        for (let vertexIndex = 0; vertexIndex < src.length; ++vertexIndex) {
+                            dst[vertexIndex] += src[vertexIndex];
+                        }
+                    }
+
+                    rayCount += result.stats.rayCount;
+                    durationMs += result.stats.durationMs;
+                    result.mesh.destroy();
+                }
+
+                if (!averagedValues) continue;
+                let vertexCount = 0;
+                let totalAO = 0;
+                let minAO = 1;
+                let maxAO = 0;
+                for (const values of averagedValues) {
+                    for (let i = 0; i < values.length; ++i) {
+                        values[i] /= group.length;
+                        const value = values[i];
+                        totalAO += value;
+                        minAO = Math.min(minAO, value);
+                        maxAO = Math.max(maxAO, value);
+                    }
+                    vertexCount += values.length;
+                }
+
+                const sharedMesh = createMeshWithAmbientOcclusionValues(
+                    representative.target.mesh,
+                    averagedValues,
+                    options.channel ?? 'r',
+                );
+                const stats: IAOBakeStats = {
+                    vertexCount,
+                    rayCount,
+                    durationMs,
+                    minAO: vertexCount ? minAO : 1,
+                    averageAO: vertexCount ? totalAO / vertexCount : 1,
+                    maxAO: vertexCount ? maxAO : 1,
+                };
+
                 output.push({
                     nodeUuids: group.map((item) => item.node.uuid),
                     nodeName: representative.renderer.mesh?.name || representative.node.name,
-                    glbBase64: exportMeshToGLB(result.mesh).toString('base64'),
-                    stats: result.stats,
+                    glbBase64: exportMeshToGLB(sharedMesh).toString('base64'),
+                    stats,
                 });
+                sharedMesh.destroy();
             }
             return output;
         }
