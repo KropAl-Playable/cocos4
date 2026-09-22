@@ -35,6 +35,12 @@ declare module 'cc/editor/serialization' {
         stats: IAOBakeStats;
     }
 
+    export function createMeshWithAmbientOcclusionValues(
+        source: Mesh,
+        values: readonly Float32Array[],
+        channel: AOVertexColorChannel,
+    ): Mesh;
+
     export function bakeMeshAmbientOcclusion(
         target: IAOBakeTarget,
         sceneOccluders?: readonly IAOBakeTarget[],
