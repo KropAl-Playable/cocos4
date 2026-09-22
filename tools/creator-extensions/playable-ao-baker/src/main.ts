@@ -12,10 +12,10 @@ interface BakeOptions {
     channel: 'r' | 'g' | 'b' | 'a';
 }
 
-interface SerializedBake {
+interface ExportedBake {
     nodeUuid: string;
     nodeName: string;
-    serializedMesh: string;
+    glbBase64: string;
     stats: {
         vertexCount: number;
         rayCount: number;
@@ -24,6 +24,12 @@ interface SerializedBake {
         averageAO: number;
         maxAO: number;
     };
+}
+
+interface AssetInfoLike {
+    uuid: string;
+    type?: string;
+    subAssets?: Record<string, AssetInfoLike>;
 }
 
 function selectedNodeUuids(): string[] {
@@ -41,6 +47,26 @@ async function executeScene(method: string, args: unknown[] = []): Promise<any> 
 function sanitizeAssetName(name: string): string {
     const sanitized = name.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').trim();
     return sanitized || 'mesh';
+}
+
+function findMeshSubAsset(info: AssetInfoLike | null | undefined): AssetInfoLike | null {
+    if (!info) return null;
+    if (info.type === 'cc.Mesh') return info;
+    for (const subAsset of Object.values(info.subAssets || {})) {
+        const found = findMeshSubAsset(subAsset);
+        if (found) return found;
+    }
+    return null;
+}
+
+async function queryImportedMesh(url: string): Promise<AssetInfoLike> {
+    for (let attempt = 0; attempt < 20; ++attempt) {
+        const info = await Editor.Message.request('asset-db', 'query-asset-info', url) as AssetInfoLike | null;
+        const mesh = findMeshSubAsset(info);
+        if (mesh) return mesh;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error(`Imported GLB did not expose a cc.Mesh sub-asset: ${url}`);
 }
 
 export const methods: Record<string, (...args: any[]) => any> = {
@@ -67,15 +93,23 @@ export const methods: Record<string, (...args: any[]) => any> = {
         if (!uuids.length) throw new Error('Select at least one node with a MeshRenderer.');
 
         const directory = (outputDirectory || 'db://assets').replace(/\/$/, '');
-        const baked = await executeScene('serializeBakedMeshes', [uuids, options]) as SerializedBake[];
-        const created: Array<{ nodeUuid: string; url: string; uuid: string; stats: SerializedBake['stats'] }> = [];
+        const baked = await executeScene('exportBakedMeshes', [uuids, options]) as ExportedBake[];
+        const created: Array<{ nodeUuid: string; url: string; uuid: string; stats: ExportedBake['stats'] }> = [];
 
         for (const item of baked) {
-            const requestedUrl = `${directory}/${sanitizeAssetName(item.nodeName)}-ao.mesh`;
+            const requestedUrl = `${directory}/${sanitizeAssetName(item.nodeName)}-ao.glb`;
             const url = await Editor.Message.request('asset-db', 'generate-available-url', requestedUrl);
-            const info = await Editor.Message.request('asset-db', 'create-asset', url, item.serializedMesh);
+            const glb = Buffer.from(item.glbBase64, 'base64');
+            const info = await Editor.Message.request('asset-db', 'create-asset', url, glb);
             if (!info) throw new Error(`Asset DB failed to create ${url}`);
-            created.push({ nodeUuid: item.nodeUuid, url, uuid: info.uuid, stats: item.stats });
+
+            const mesh = findMeshSubAsset(info as AssetInfoLike) || await queryImportedMesh(url);
+            created.push({
+                nodeUuid: item.nodeUuid,
+                url,
+                uuid: mesh.uuid,
+                stats: item.stats,
+            });
         }
 
         await executeScene('assignBakedAssets', [created.map((item) => ({
