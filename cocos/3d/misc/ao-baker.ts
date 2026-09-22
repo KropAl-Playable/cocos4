@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2017-2026 Xiamen Yaji Software Co., Ltd.
+ Copyright (c) 2017-2023 Xiamen Yaji Software Co., Ltd.
 
  https://www.cocos.com/
 
@@ -12,6 +12,14 @@
 
  The above copyright notice and this permission notice shall be included in
  all copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ THE SOFTWARE.
 */
 
 import { Mat4, Vec3 } from '../../core';
@@ -72,9 +80,18 @@ interface ITriangle {
     maxX: number; maxY: number; maxZ: number;
 }
 
+interface IBVHNode {
+    minX: number; minY: number; minZ: number;
+    maxX: number; maxY: number; maxZ: number;
+    left?: IBVHNode;
+    right?: IBVHNode;
+    triangleIndices?: number[];
+}
+
 interface IOccluder {
     source: IAOBakeTarget;
     triangles: ITriangle[];
+    root?: IBVHNode;
     minX: number; minY: number; minZ: number;
     maxX: number; maxY: number; maxZ: number;
 }
@@ -160,6 +177,49 @@ function makeTriangle (
     };
 }
 
+function buildBVH (triangles: readonly ITriangle[], triangleIndices: number[]): IBVHNode | undefined {
+    if (triangleIndices.length === 0) return undefined;
+
+    let minX = Infinity; let minY = Infinity; let minZ = Infinity;
+    let maxX = -Infinity; let maxY = -Infinity; let maxZ = -Infinity;
+    let centroidMinX = Infinity; let centroidMinY = Infinity; let centroidMinZ = Infinity;
+    let centroidMaxX = -Infinity; let centroidMaxY = -Infinity; let centroidMaxZ = -Infinity;
+
+    for (let i = 0; i < triangleIndices.length; ++i) {
+        const triangle = triangles[triangleIndices[i]];
+        minX = Math.min(minX, triangle.minX); minY = Math.min(minY, triangle.minY); minZ = Math.min(minZ, triangle.minZ);
+        maxX = Math.max(maxX, triangle.maxX); maxY = Math.max(maxY, triangle.maxY); maxZ = Math.max(maxZ, triangle.maxZ);
+        const cx = (triangle.ax + triangle.bx + triangle.cx) / 3;
+        const cy = (triangle.ay + triangle.by + triangle.cy) / 3;
+        const cz = (triangle.az + triangle.bz + triangle.cz) / 3;
+        centroidMinX = Math.min(centroidMinX, cx); centroidMinY = Math.min(centroidMinY, cy); centroidMinZ = Math.min(centroidMinZ, cz);
+        centroidMaxX = Math.max(centroidMaxX, cx); centroidMaxY = Math.max(centroidMaxY, cy); centroidMaxZ = Math.max(centroidMaxZ, cz);
+    }
+
+    const node: IBVHNode = { minX, minY, minZ, maxX, maxY, maxZ };
+    if (triangleIndices.length <= 8) {
+        node.triangleIndices = triangleIndices;
+        return node;
+    }
+
+    const extentX = centroidMaxX - centroidMinX;
+    const extentY = centroidMaxY - centroidMinY;
+    const extentZ = centroidMaxZ - centroidMinZ;
+    const axis = extentX >= extentY && extentX >= extentZ ? 0 : (extentY >= extentZ ? 1 : 2);
+    triangleIndices.sort((lhs, rhs) => {
+        const a = triangles[lhs];
+        const b = triangles[rhs];
+        const ac = axis === 0 ? a.ax + a.bx + a.cx : (axis === 1 ? a.ay + a.by + a.cy : a.az + a.bz + a.cz);
+        const bc = axis === 0 ? b.ax + b.bx + b.cx : (axis === 1 ? b.ay + b.by + b.cy : b.az + b.bz + b.cz);
+        return ac - bc;
+    });
+
+    const middle = triangleIndices.length >> 1;
+    node.left = buildBVH(triangles, triangleIndices.slice(0, middle));
+    node.right = buildBVH(triangles, triangleIndices.slice(middle));
+    return node;
+}
+
 function buildOccluder (source: IAOBakeTarget): IOccluder {
     const triangles: ITriangle[] = [];
     let minX = Infinity; let minY = Infinity; let minZ = Infinity;
@@ -183,7 +243,10 @@ function buildOccluder (source: IAOBakeTarget): IOccluder {
         }
     }
 
-    return { source, triangles, minX, minY, minZ, maxX, maxY, maxZ };
+    const triangleIndices = new Array<number>(triangles.length);
+    for (let i = 0; i < triangles.length; ++i) triangleIndices[i] = i;
+    const root = buildBVH(triangles, triangleIndices);
+    return { source, triangles, root, minX, minY, minZ, maxX, maxY, maxZ };
 }
 
 function rayAABB (
@@ -255,6 +318,33 @@ function rayTriangle (
     return distance > 0 && distance <= maxDistance;
 }
 
+function rayBVH (
+    node: IBVHNode | undefined,
+    triangles: readonly ITriangle[],
+    ox: number, oy: number, oz: number,
+    dx: number, dy: number, dz: number,
+    maxDistance: number,
+    doubleSided: boolean,
+): boolean {
+    if (!node || !rayAABB(
+        ox, oy, oz, dx, dy, dz,
+        node.minX, node.minY, node.minZ,
+        node.maxX, node.maxY, node.maxZ,
+        maxDistance,
+    )) return false;
+
+    if (node.triangleIndices) {
+        for (let i = 0; i < node.triangleIndices.length; ++i) {
+            const triangle = triangles[node.triangleIndices[i]];
+            if (rayTriangle(ox, oy, oz, dx, dy, dz, triangle, maxDistance, doubleSided)) return true;
+        }
+        return false;
+    }
+
+    return rayBVH(node.left, triangles, ox, oy, oz, dx, dy, dz, maxDistance, doubleSided)
+        || rayBVH(node.right, triangles, ox, oy, oz, dx, dy, dz, maxDistance, doubleSided);
+}
+
 function isOccluded (
     ox: number, oy: number, oz: number,
     dx: number, dy: number, dz: number,
@@ -275,17 +365,14 @@ function isOccluded (
             maxDistance,
         )) continue;
 
-        const triangles = occluder.triangles;
-        for (let triangleIndex = 0; triangleIndex < triangles.length; ++triangleIndex) {
-            const triangle = triangles[triangleIndex];
-            if (!rayAABB(
-                ox, oy, oz, dx, dy, dz,
-                triangle.minX, triangle.minY, triangle.minZ,
-                triangle.maxX, triangle.maxY, triangle.maxZ,
-                maxDistance,
-            )) continue;
-            if (rayTriangle(ox, oy, oz, dx, dy, dz, triangle, maxDistance, options.doubleSided)) return true;
-        }
+        if (rayBVH(
+            occluder.root,
+            occluder.triangles,
+            ox, oy, oz,
+            dx, dy, dz,
+            maxDistance,
+            options.doubleSided,
+        )) return true;
     }
     return false;
 }
