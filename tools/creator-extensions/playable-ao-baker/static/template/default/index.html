@@ -1,0 +1,61 @@
+<div class="root">
+    <h2>Playable AO Baker</h2>
+    <div class="hint">Select one or more nodes with MeshRenderer components. Preview temporarily replaces their materials with an AO-only debug material.</div>
+
+    <section>
+        <div class="section-title">Selection</div>
+        <pre id="selection">No selected MeshRenderer.</pre>
+        <button id="refresh">Refresh Selection</button>
+    </section>
+
+    <section class="grid">
+        <label>Samples
+            <select id="samples">
+                <option value="16">16 — Preview</option>
+                <option value="32" selected>32 — Normal</option>
+                <option value="64">64 — High</option>
+            </select>
+        </label>
+        <label>Max Distance <input id="distance" type="number" min="0" step="0.05" value="2"></label>
+        <label>Ray Bias <input id="bias" type="number" min="0" step="0.0005" value="0.002"></label>
+        <label>Strength <input id="strength" type="number" min="0" step="0.05" value="1"></label>
+        <label>Contrast <input id="contrast" type="number" min="0.01" step="0.05" value="1"></label>
+        <label>Channel
+            <select id="channel">
+                <option value="r" selected>R</option>
+                <option value="g">G</option>
+                <option value="b">B</option>
+                <option value="a">A</option>
+            </select>
+        </label>
+        <label>Mesh Sharing
+            <select id="sharing-mode">
+                <option value="auto" selected>Auto — dedupe identical</option>
+                <option value="shared-source">Shared by source mesh</option>
+                <option value="per-instance">Per instance</option>
+            </select>
+        </label>
+    </section>
+
+    <section class="checks">
+        <label><input id="self-occlusion" type="checkbox" checked> Self Occlusion</label>
+        <label><input id="scene-occluders" type="checkbox" checked> Scene Occluders</label>
+        <label><input id="double-sided" type="checkbox" checked> Double Sided</label>
+    </section>
+
+    <section>
+        <label>Output directory
+            <input id="output" class="wide" value="db://assets" title="Use an existing AssetDB directory.">
+        </label>
+        <div class="hint">Auto reuses byte-identical AO results. Shared by source mesh averages AO across all selected instances that use the same source mesh, preserving one mesh asset while retaining approximate scene occlusion. Per instance keeps unique environment-dependent AO.</div>
+    </section>
+
+    <div class="actions">
+        <button id="preview">Preview AO</button>
+        <button id="restore">Restore</button>
+        <button id="bake" class="primary">Bake Selected</button>
+    </div>
+
+    <div id="status" class="status"></div>
+    <pre id="stats" class="stats"></pre>
+</div>
