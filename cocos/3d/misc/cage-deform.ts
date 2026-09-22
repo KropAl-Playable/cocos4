@@ -22,6 +22,7 @@ export interface ICageSpringSettings {
 export interface ICageLayout {
     positions: Vec3[];
     parents: number[];
+    trunkCount: number;
 }
 
 function clampControlCount (controlCount: number): number {
@@ -97,7 +98,7 @@ export function buildDefaultCageLayout (source: Mesh, controlCount: number): ICa
         parents[index] = trunkTop;
     }
 
-    return { positions, parents };
+    return { positions, parents, trunkCount };
 }
 
 /**
@@ -118,7 +119,8 @@ export function encodeCageInfluences (
     const depth = Math.max(0.001, boundsMax.z - boundsMin.z);
     const normalizedHeight = Math.max(0, Math.min(1, (position.y - boundsMin.y) / height));
 
-    // Hard plant the very bottom of the mesh to root.
+    // Hard plant the lowest vertices to the root. This is intentionally a
+    // geometric rule rather than a spring constraint so the trunk cannot slide.
     if (normalizedHeight <= 0.035) {
         outIndices.fill(0, offset, offset + 4);
         outWeights[offset] = 255;
@@ -128,61 +130,75 @@ export function encodeCageInfluences (
         return;
     }
 
-    const bestIndices = [-1, -1, -1, -1];
-    const bestScores = [-1, -1, -1, -1];
+    const trunkCount = Math.max(2, Math.min(layout.trunkCount, layout.positions.length));
+    const trunkTopY = layout.positions[trunkCount - 1].y;
+    const trunkSpan = Math.max(1e-6, trunkTopY - layout.positions[0].y);
+    const trunkT = Math.max(0, Math.min(1, (position.y - layout.positions[0].y) / trunkSpan)) * (trunkCount - 1);
+    const trunk0 = Math.min(trunkCount - 1, Math.floor(trunkT));
+    const trunk1 = Math.min(trunkCount - 1, trunk0 + 1);
+    const trunkW1 = trunkT - trunk0;
+    const trunkW0 = 1 - trunkW1;
 
-    for (let controlIndex = 0; controlIndex < layout.positions.length; ++controlIndex) {
-        const control = layout.positions[controlIndex];
-        const dx = (position.x - control.x) / (width * 0.5);
-        const dy = (position.y - control.y) / (height * 0.28);
-        const dz = (position.z - control.z) / (depth * 0.5);
-        const distanceSq = dx * dx + dy * dy + dz * dz;
+    // Crown controls are deliberately prevented from influencing the central
+    // trunk. Their contribution grows only for high AND laterally distant
+    // vertices, which keeps the stem behaving like a bending beam instead of jelly.
+    const centerX = (boundsMin.x + boundsMax.x) * 0.5;
+    const centerZ = (boundsMin.z + boundsMax.z) * 0.5;
+    const radialX = (position.x - centerX) / (width * 0.5);
+    const radialZ = (position.z - centerZ) / (depth * 0.5);
+    const radial = Math.min(1, Math.sqrt(radialX * radialX + radialZ * radialZ));
+    const crownHeight = Math.max(0, Math.min(1, (normalizedHeight - 0.60) / 0.28));
+    const branchMix = Math.min(0.72, crownHeight * radial * 0.72);
 
-        // Squared inverse distance gives branch controls a readable local region
-        // without requiring authored branch masks yet.
-        let score = 1 / ((0.08 + distanceSq) * (0.08 + distanceSq));
+    const indices = [trunk0, trunk1, 0, 0];
+    const weights = [trunkW0 * (1 - branchMix), trunkW1 * (1 - branchMix), 0, 0];
 
-        // Root influence fades quickly with height; this keeps the base planted
-        // while preventing root from competing with crown controls.
-        if (controlIndex === 0) score *= Math.max(0.02, 1 - normalizedHeight * 2.5);
+    if (layout.positions.length > trunkCount && branchMix > 0.0001) {
+        let best0 = -1;
+        let best1 = -1;
+        let score0 = -1;
+        let score1 = -1;
 
-        let insert = MAX_CAGE_INFLUENCES;
-        for (let slot = 0; slot < MAX_CAGE_INFLUENCES; ++slot) {
-            if (score > bestScores[slot]) {
-                insert = slot;
-                break;
+        for (let controlIndex = trunkCount; controlIndex < layout.positions.length; ++controlIndex) {
+            const control = layout.positions[controlIndex];
+            const dx = (position.x - control.x) / (width * 0.5);
+            const dy = (position.y - control.y) / (height * 0.22);
+            const dz = (position.z - control.z) / (depth * 0.5);
+            const score = 1 / (0.05 + dx * dx + dy * dy + dz * dz);
+            if (score > score0) {
+                best1 = best0;
+                score1 = score0;
+                best0 = controlIndex;
+                score0 = score;
+            } else if (score > score1) {
+                best1 = controlIndex;
+                score1 = score;
             }
         }
-        if (insert < MAX_CAGE_INFLUENCES) {
-            for (let slot = MAX_CAGE_INFLUENCES - 1; slot > insert; --slot) {
-                bestScores[slot] = bestScores[slot - 1];
-                bestIndices[slot] = bestIndices[slot - 1];
+
+        if (best0 >= 0) {
+            const sum = Math.max(1e-6, score0 + Math.max(0, score1));
+            indices[2] = best0;
+            weights[2] = branchMix * score0 / sum;
+            if (best1 >= 0) {
+                indices[3] = best1;
+                weights[3] = branchMix * score1 / sum;
+            } else {
+                weights[2] = branchMix;
             }
-            bestScores[insert] = score;
-            bestIndices[insert] = controlIndex;
         }
     }
-
-    let totalScore = 0;
-    for (let slot = 0; slot < MAX_CAGE_INFLUENCES; ++slot) {
-        if (bestIndices[slot] >= 0) totalScore += Math.max(0, bestScores[slot]);
-    }
-    totalScore = Math.max(totalScore, 1e-8);
 
     let encodedWeightTotal = 0;
     for (let slot = 0; slot < MAX_CAGE_INFLUENCES; ++slot) {
-        const index = Math.max(0, bestIndices[slot]);
-        const weight = bestIndices[slot] >= 0 ? Math.max(0, bestScores[slot]) / totalScore : 0;
-        outIndices[offset + slot] = Math.round(index / (MAX_CAGE_CONTROLS - 1) * 255);
-        const encodedWeight = Math.round(weight * 255);
+        outIndices[offset + slot] = Math.round(indices[slot] / (MAX_CAGE_CONTROLS - 1) * 255);
+        const encodedWeight = Math.round(Math.max(0, weights[slot]) * 255);
         outWeights[offset + slot] = encodedWeight;
         encodedWeightTotal += encodedWeight;
     }
 
-    // Preserve an exact normalized sum after RGBA8 quantization.
     if (encodedWeightTotal !== 255) {
-        const corrected = Math.max(0, Math.min(255, outWeights[offset] + (255 - encodedWeightTotal)));
-        outWeights[offset] = corrected;
+        outWeights[offset] = Math.max(0, Math.min(255, outWeights[offset] + (255 - encodedWeightTotal)));
     }
 }
 
