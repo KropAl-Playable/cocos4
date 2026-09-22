@@ -98,6 +98,11 @@ export class CageDeformer extends Component {
     private _restControls: Vec3[] = [];
     private _uniformOffsets: Vec4[] = [];
     private _params = new Vec4();
+    private _springSettings = {
+        stiffness: 18,
+        damping: 0.9,
+        maxDisplacement: 1.5,
+    };
     private _materialInstances: ReturnType<MeshRenderer['getMaterialInstance']>[] = [];
 
     protected onEnable(): void {
@@ -120,11 +125,9 @@ export class CageDeformer extends Component {
         if (!this._renderer || !this._cageMesh || this._controlCount < 2) return;
         this._time += Math.max(0, Math.min(dt, 0.05));
 
-        const settings = {
-            stiffness: this.stiffness,
-            damping: this.damping,
-            maxDisplacement: this.maxDisplacement,
-        };
+        this._springSettings.stiffness = this.stiffness;
+        this._springSettings.damping = this.damping;
+        this._springSettings.maxDisplacement = this.maxDisplacement;
 
         // Root stays planted. Higher controls receive progressively stronger
         // wind and a phase lag that makes the crown trail behind the trunk.
@@ -141,7 +144,7 @@ export class CageDeformer extends Component {
                 0,
                 Math.cos(phase * 0.73) * amplitude * 0.35,
             );
-            stepCageSpring(this._offsets[i], this._velocities[i], this._targets[i], settings, dt);
+            stepCageSpring(this._offsets[i], this._velocities[i], this._targets[i], this._springSettings, dt);
         }
 
         this._uploadControls();
