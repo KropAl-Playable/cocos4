@@ -1,4 +1,4 @@
-declare module 'cc/editor/ao-baker' {
+declare module 'cc/editor/serialization' {
     import type { Mat4, Mesh } from 'cc';
 
     export type AOVertexColorChannel = 'r' | 'g' | 'b' | 'a';
