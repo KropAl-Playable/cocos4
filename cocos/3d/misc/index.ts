@@ -26,6 +26,4 @@ export { find } from '../../scene-graph/find';
 export { toPPM } from './ppm';
 export { readMesh } from './read-mesh';
 export { createMesh, MeshUtils } from './create-mesh';
-export { bakeMeshAmbientOcclusion } from './ao-baker';
-export type { AOVertexColorChannel, IAOBakeTarget, IAOBakeOptions, IAOBakeStats, IAOBakeResult } from './ao-baker';
 export { readBuffer, writeBuffer, mapBuffer } from './buffer';
