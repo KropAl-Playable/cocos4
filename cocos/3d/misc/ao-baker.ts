@@ -26,7 +26,7 @@ import { Mat4, Vec3 } from '../../core';
 import { Attribute, AttributeName, Format, FormatInfos, PrimitiveMode } from '../../gfx';
 import { Mesh } from '../assets/mesh';
 
-export type AOVertexColorChannel = 'r' | 'g' | 'b' | 'a';
+export type AOVertexColorChannel = 'r' | 'g' | 'b' | 'a' | 'rgb';
 
 export interface IAOBakeTarget {
     mesh: Mesh;
@@ -135,12 +135,13 @@ function radicalInverseVdC (bits: number): number {
     return bits * 2.3283064365386963e-10;
 }
 
-function channelIndex (channel: AOVertexColorChannel): number {
+function channelIndices (channel: AOVertexColorChannel): readonly number[] {
     switch (channel) {
-    case 'r': return 0;
-    case 'g': return 1;
-    case 'b': return 2;
-    default: return 3;
+    case 'r': return [0];
+    case 'g': return [1];
+    case 'b': return [2];
+    case 'a': return [3];
+    case 'rgb': return [0, 1, 2];
     }
 }
 
@@ -436,7 +437,7 @@ function cloneStaticMeshWithAO (
     const vertexBundles: Mesh.IVertexBundle[] = [];
     const vertexChunks: Uint8Array[] = [];
     let totalBytes = 0;
-    const targetChannel = channelIndex(channel);
+    const targetChannels = channelIndices(channel);
 
     for (let bundleIndex = 0; bundleIndex < originalStruct.vertexBundles.length; ++bundleIndex) {
         const sourceBundle = originalStruct.vertexBundles[bundleIndex];
@@ -479,9 +480,10 @@ function cloneStaticMeshWithAO (
                 chunk[dstOffset + sourceStride + 1] = 255;
                 chunk[dstOffset + sourceStride + 2] = 255;
                 chunk[dstOffset + sourceStride + 3] = 255;
-                chunk[dstOffset + sourceStride + targetChannel] = Math.round(
-                    Math.max(0, Math.min(1, ao[vertexIndex])) * 255,
-                );
+                const encodedAO = Math.round(Math.max(0, Math.min(1, ao[vertexIndex])) * 255);
+                for (let channelIndex = 0; channelIndex < targetChannels.length; ++channelIndex) {
+                    chunk[dstOffset + sourceStride + targetChannels[channelIndex]] = encodedAO;
+                }
             }
             attributes.push(new Attribute(AttributeName.ATTR_COLOR, Format.RGBA8, true));
         } else {
