@@ -10,6 +10,7 @@ interface BakeSettings {
     sceneOccluders: boolean;
     doubleSided: boolean;
     channel: 'r' | 'g' | 'b' | 'a';
+    sharingMode: 'auto' | 'shared-source' | 'per-instance';
 }
 
 function numberValue(element: HTMLInputElement, fallback: number): number {
@@ -32,6 +33,7 @@ module.exports = Editor.Panel.define({
         sceneOccluders: '#scene-occluders',
         doubleSided: '#double-sided',
         channel: '#channel',
+        sharingMode: '#sharing-mode',
         output: '#output',
         refresh: '#refresh',
         preview: '#preview',
@@ -53,6 +55,7 @@ module.exports = Editor.Panel.define({
                 sceneOccluders: (this.$.sceneOccluders as HTMLInputElement).checked,
                 doubleSided: (this.$.doubleSided as HTMLInputElement).checked,
                 channel: (this.$.channel as HTMLSelectElement).value as BakeSettings['channel'],
+                sharingMode: (this.$.sharingMode as HTMLSelectElement).value as BakeSettings['sharingMode'],
             };
         },
 
@@ -102,9 +105,17 @@ module.exports = Editor.Panel.define({
             this.setBusy(true, 'Baking and creating Mesh assets…');
             try {
                 const output = (this.$.output as HTMLInputElement).value.trim() || 'db://assets';
-                const result = await Editor.Message.request(PACKAGE_NAME, 'bake', this.settings(), output) as any[];
-                this.showStats(result.map((item) => ({ nodeName: item.url, stats: item.stats })));
-                this.setBusy(false, `Created ${result.length} mesh asset(s).`);
+                const result = await Editor.Message.request(PACKAGE_NAME, 'bake', this.settings(), output) as {
+                    assets: any[];
+                    assignedCount: number;
+                    uniqueAssetCount: number;
+                    sharingMode: BakeSettings['sharingMode'];
+                };
+                this.showStats(result.assets.map((item) => ({ nodeName: item.url, stats: item.stats })));
+                this.setBusy(
+                    false,
+                    `Assigned ${result.assignedCount} renderer(s) using ${result.uniqueAssetCount} unique mesh asset(s).`,
+                );
                 await this.refreshSelection();
             } catch (error) {
                 this.setBusy(false, error instanceof Error ? error.message : String(error));
@@ -117,6 +128,12 @@ module.exports = Editor.Panel.define({
         (this.$.preview as HTMLButtonElement).addEventListener('click', () => void this.runPreview());
         (this.$.restore as HTMLButtonElement).addEventListener('click', () => void this.runRestore());
         (this.$.bake as HTMLButtonElement).addEventListener('click', () => void this.runBake());
+        (this.$.sharingMode as HTMLSelectElement).addEventListener('change', () => {
+            const shared = (this.$.sharingMode as HTMLSelectElement).value === 'shared-source';
+            const sceneOccluders = this.$.sceneOccluders as HTMLInputElement;
+            if (shared) sceneOccluders.checked = false;
+            sceneOccluders.disabled = shared;
+        });
         await this.refreshSelection();
     },
 });
