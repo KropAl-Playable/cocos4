@@ -9,7 +9,9 @@ import { Attribute, AttributeName, Format, FormatInfos, PrimitiveMode } from '..
 import { Mesh } from '../assets/mesh';
 
 export const MAX_CAGE_CONTROLS = 8;
-export const CAGE_INFLUENCE_ATTRIBUTE = 'a_cageInfluence';
+export const MAX_CAGE_INFLUENCES = 4;
+export const CAGE_INDEX_ATTRIBUTE = 'a_cageIndices';
+export const CAGE_WEIGHT_ATTRIBUTE = 'a_cageWeights';
 
 export interface ICageSpringSettings {
     stiffness: number;
@@ -17,34 +19,175 @@ export interface ICageSpringSettings {
     maxDisplacement: number;
 }
 
-/**
- * Encodes two adjacent cage-control indices and their weights into one RGBA8
- * normalized attribute:
- *   R = control index 0 / 7
- *   G = control index 1 / 7
- *   B = weight 0
- *   A = weight 1
- */
-export function encodeCageInfluence (
-    normalizedHeight: number,
-    controlCount: number,
-    output: Uint8Array,
-    offset: number,
-): void {
-    const count = Math.max(2, Math.min(MAX_CAGE_CONTROLS, Math.floor(controlCount)));
-    const t = Math.max(0, Math.min(1, normalizedHeight)) * (count - 1);
-    const i0 = Math.floor(t);
-    const i1 = Math.min(count - 1, i0 + 1);
-    const w1 = t - i0;
-    const w0 = 1 - w1;
-    output[offset] = Math.round(i0 / (MAX_CAGE_CONTROLS - 1) * 255);
-    output[offset + 1] = Math.round(i1 / (MAX_CAGE_CONTROLS - 1) * 255);
-    output[offset + 2] = Math.round(w0 * 255);
-    output[offset + 3] = Math.round(w1 * 255);
+export interface ICageLayout {
+    positions: Vec3[];
+    parents: number[];
+}
+
+function clampControlCount (controlCount: number): number {
+    return Math.max(2, Math.min(MAX_CAGE_CONTROLS, Math.floor(controlCount)));
+}
+
+function meshBounds (source: Mesh): { min: Vec3; max: Vec3 } {
+    if (source.struct.minPosition && source.struct.maxPosition) {
+        return {
+            min: new Vec3(source.struct.minPosition.x, source.struct.minPosition.y, source.struct.minPosition.z),
+            max: new Vec3(source.struct.maxPosition.x, source.struct.maxPosition.y, source.struct.maxPosition.z),
+        };
+    }
+
+    const min = new Vec3(Infinity, Infinity, Infinity);
+    const max = new Vec3(-Infinity, -Infinity, -Infinity);
+    for (let primitiveIndex = 0; primitiveIndex < source.struct.primitives.length; ++primitiveIndex) {
+        const positions = source.readAttribute(primitiveIndex, AttributeName.ATTR_POSITION);
+        if (!(positions instanceof Float32Array)) continue;
+        for (let i = 0; i + 2 < positions.length; i += 3) {
+            min.x = Math.min(min.x, positions[i]);
+            min.y = Math.min(min.y, positions[i + 1]);
+            min.z = Math.min(min.z, positions[i + 2]);
+            max.x = Math.max(max.x, positions[i]);
+            max.y = Math.max(max.y, positions[i + 1]);
+            max.z = Math.max(max.z, positions[i + 2]);
+        }
+    }
+    if (!Number.isFinite(min.x)) min.set(-0.5, 0, -0.5);
+    if (!Number.isFinite(max.x)) max.set(0.5, 1, 0.5);
+    if (Math.abs(max.y - min.y) < 1e-6) max.y = min.y + 1;
+    return { min, max };
 }
 
 /**
- * Stable-enough semi-implicit damped spring used by CageDeformer controls.
+ * Deterministic v0.1 authoring layout.
+ *
+ * 2-5 controls: vertical trunk chain.
+ * 6-8 controls: trunk chain plus crown-side controls parented to trunk top.
+ */
+export function buildDefaultCageLayout (source: Mesh, controlCount: number): ICageLayout {
+    source.initialize();
+    const count = clampControlCount(controlCount);
+    const { min, max } = meshBounds(source);
+    const centerX = (min.x + max.x) * 0.5;
+    const centerZ = (min.z + max.z) * 0.5;
+    const width = Math.max(0.001, max.x - min.x);
+    const depth = Math.max(0.001, max.z - min.z);
+    const height = max.y - min.y;
+
+    const branchCount = count >= 6 ? Math.min(3, count - 4) : 0;
+    const trunkCount = count - branchCount;
+    const positions: Vec3[] = new Array(count);
+    const parents: number[] = new Array(count);
+
+    const trunkTopT = branchCount > 0 ? 0.82 : 1.0;
+    for (let i = 0; i < trunkCount; ++i) {
+        const t = trunkCount > 1 ? i / (trunkCount - 1) : 0;
+        positions[i] = new Vec3(centerX, min.y + height * t * trunkTopT, centerZ);
+        parents[i] = i === 0 ? -1 : i - 1;
+    }
+
+    const trunkTop = trunkCount - 1;
+    for (let branchIndex = 0; branchIndex < branchCount; ++branchIndex) {
+        const index = trunkCount + branchIndex;
+        if (branchIndex === 0) {
+            positions[index] = new Vec3(centerX - width * 0.42, min.y + height * 0.94, centerZ);
+        } else if (branchIndex === 1) {
+            positions[index] = new Vec3(centerX + width * 0.42, min.y + height * 0.94, centerZ);
+        } else {
+            positions[index] = new Vec3(centerX, min.y + height * 0.96, centerZ + depth * 0.42);
+        }
+        parents[index] = trunkTop;
+    }
+
+    return { positions, parents };
+}
+
+/**
+ * Selects up to four spatially relevant controls for a vertex and encodes
+ * indices/weights into two normalized RGBA8 attributes.
+ */
+export function encodeCageInfluences (
+    position: Readonly<Vec3>,
+    layout: Readonly<ICageLayout>,
+    boundsMin: Readonly<Vec3>,
+    boundsMax: Readonly<Vec3>,
+    outIndices: Uint8Array,
+    outWeights: Uint8Array,
+    offset: number,
+): void {
+    const width = Math.max(0.001, boundsMax.x - boundsMin.x);
+    const height = Math.max(0.001, boundsMax.y - boundsMin.y);
+    const depth = Math.max(0.001, boundsMax.z - boundsMin.z);
+    const normalizedHeight = Math.max(0, Math.min(1, (position.y - boundsMin.y) / height));
+
+    // Hard plant the very bottom of the mesh to root.
+    if (normalizedHeight <= 0.035) {
+        outIndices.fill(0, offset, offset + 4);
+        outWeights[offset] = 255;
+        outWeights[offset + 1] = 0;
+        outWeights[offset + 2] = 0;
+        outWeights[offset + 3] = 0;
+        return;
+    }
+
+    const bestIndices = [-1, -1, -1, -1];
+    const bestScores = [-1, -1, -1, -1];
+
+    for (let controlIndex = 0; controlIndex < layout.positions.length; ++controlIndex) {
+        const control = layout.positions[controlIndex];
+        const dx = (position.x - control.x) / (width * 0.5);
+        const dy = (position.y - control.y) / (height * 0.28);
+        const dz = (position.z - control.z) / (depth * 0.5);
+        const distanceSq = dx * dx + dy * dy + dz * dz;
+
+        // Squared inverse distance gives branch controls a readable local region
+        // without requiring authored branch masks yet.
+        let score = 1 / ((0.08 + distanceSq) * (0.08 + distanceSq));
+
+        // Root influence fades quickly with height; this keeps the base planted
+        // while preventing root from competing with crown controls.
+        if (controlIndex === 0) score *= Math.max(0.02, 1 - normalizedHeight * 2.5);
+
+        let insert = MAX_CAGE_INFLUENCES;
+        for (let slot = 0; slot < MAX_CAGE_INFLUENCES; ++slot) {
+            if (score > bestScores[slot]) {
+                insert = slot;
+                break;
+            }
+        }
+        if (insert < MAX_CAGE_INFLUENCES) {
+            for (let slot = MAX_CAGE_INFLUENCES - 1; slot > insert; --slot) {
+                bestScores[slot] = bestScores[slot - 1];
+                bestIndices[slot] = bestIndices[slot - 1];
+            }
+            bestScores[insert] = score;
+            bestIndices[insert] = controlIndex;
+        }
+    }
+
+    let totalScore = 0;
+    for (let slot = 0; slot < MAX_CAGE_INFLUENCES; ++slot) {
+        if (bestIndices[slot] >= 0) totalScore += Math.max(0, bestScores[slot]);
+    }
+    totalScore = Math.max(totalScore, 1e-8);
+
+    let encodedWeightTotal = 0;
+    for (let slot = 0; slot < MAX_CAGE_INFLUENCES; ++slot) {
+        const index = Math.max(0, bestIndices[slot]);
+        const weight = bestIndices[slot] >= 0 ? Math.max(0, bestScores[slot]) / totalScore : 0;
+        outIndices[offset + slot] = Math.round(index / (MAX_CAGE_CONTROLS - 1) * 255);
+        const encodedWeight = Math.round(weight * 255);
+        outWeights[offset + slot] = encodedWeight;
+        encodedWeightTotal += encodedWeight;
+    }
+
+    // Preserve an exact normalized sum after RGBA8 quantization.
+    if (encodedWeightTotal !== 255) {
+        const corrected = Math.max(0, Math.min(255, outWeights[offset] + (255 - encodedWeightTotal)));
+        outWeights[offset] = corrected;
+    }
+}
+
+/**
+ * Stable-enough semi-implicit damped spring used for bend-angle controls.
  * Mutates offset/velocity and allocates nothing.
  */
 export function stepCageSpring (
@@ -81,29 +224,9 @@ export function stepCageSpring (
     }
 }
 
-function meshHeightBounds (source: Mesh): { minY: number; maxY: number } {
-    if (source.struct.minPosition && source.struct.maxPosition) {
-        return { minY: source.struct.minPosition.y, maxY: source.struct.maxPosition.y };
-    }
-
-    let minY = Infinity;
-    let maxY = -Infinity;
-    for (let primitiveIndex = 0; primitiveIndex < source.struct.primitives.length; ++primitiveIndex) {
-        const positions = source.readAttribute(primitiveIndex, AttributeName.ATTR_POSITION);
-        if (!(positions instanceof Float32Array)) continue;
-        for (let i = 1; i < positions.length; i += 3) {
-            minY = Math.min(minY, positions[i]);
-            maxY = Math.max(maxY, positions[i]);
-        }
-    }
-    if (!Number.isFinite(minY) || !Number.isFinite(maxY)) return { minY: 0, maxY: 1 };
-    if (Math.abs(maxY - minY) < 1e-6) maxY = minY + 1;
-    return { minY, maxY };
-}
-
 /**
- * Creates a static mesh clone with one compact RGBA8 cage-influence attribute.
- * This is a one-time setup operation; deformation itself remains GPU-only.
+ * Creates a static mesh clone with four cage influences per vertex.
+ * Two RGBA8 attributes cost 8 bytes/vertex total.
  */
 export function createCageInfluenceMesh (source: Mesh, controlCount: number): Mesh {
     source.initialize();
@@ -116,8 +239,8 @@ export function createCageInfluenceMesh (source: Mesh, controlCount: number): Me
         throw new Error('Cage Deform v0.1 requires a decompressed, non-quantized mesh.');
     }
 
-    const { minY, maxY } = meshHeightBounds(source);
-    const invHeight = 1 / Math.max(1e-6, maxY - minY);
+    const layout = buildDefaultCageLayout(source, controlCount);
+    const { min, max } = meshBounds(source);
     const originalStruct = source.struct;
     const primitives = originalStruct.primitives.map((primitive) => ({
         ...primitive,
@@ -126,7 +249,8 @@ export function createCageInfluenceMesh (source: Mesh, controlCount: number): Me
         cluster: undefined,
     }));
 
-    const influenceByBundle = new Map<number, Uint8Array>();
+    const indexByBundle = new Map<number, Uint8Array>();
+    const weightByBundle = new Map<number, Uint8Array>();
 
     for (let primitiveIndex = 0; primitiveIndex < primitives.length; ++primitiveIndex) {
         const primitive = primitives[primitiveIndex];
@@ -139,28 +263,42 @@ export function createCageInfluenceMesh (source: Mesh, controlCount: number): Me
 
         const bundleIndex = primitive.vertexBundelIndices[0];
         const bundle = originalStruct.vertexBundles[bundleIndex];
-        if (bundle.attributes.some((attribute) => attribute.name === CAGE_INFLUENCE_ATTRIBUTE)) continue;
+        if (bundle.attributes.some((attribute) => attribute.name === CAGE_INDEX_ATTRIBUTE || attribute.name === CAGE_WEIGHT_ATTRIBUTE)) {
+            throw new Error('Cage Deform source mesh already contains cage influence attributes.');
+        }
 
         const positions = source.readAttribute(primitiveIndex, AttributeName.ATTR_POSITION);
         if (!(positions instanceof Float32Array)) {
             throw new Error(`Cage Deform requires Float32 positions on primitive ${primitiveIndex}.`);
         }
 
-        const influences = new Uint8Array(bundle.view.count * 4);
+        const indices = new Uint8Array(bundle.view.count * 4);
+        const weights = new Uint8Array(bundle.view.count * 4);
+        const vertexPosition = new Vec3();
         const vertexCount = Math.min(bundle.view.count, Math.floor(positions.length / 3));
         for (let vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
-            const y = positions[vertexIndex * 3 + 1];
-            encodeCageInfluence((y - minY) * invHeight, controlCount, influences, vertexIndex * 4);
+            vertexPosition.set(
+                positions[vertexIndex * 3],
+                positions[vertexIndex * 3 + 1],
+                positions[vertexIndex * 3 + 2],
+            );
+            encodeCageInfluences(vertexPosition, layout, min, max, indices, weights, vertexIndex * 4);
         }
 
-        const existing = influenceByBundle.get(bundleIndex);
-        if (existing) {
-            if (existing.length !== influences.length) throw new Error('Shared cage vertex bundle mismatch.');
-            for (let i = 0; i < existing.length; ++i) {
-                if (existing[i] !== influences[i]) throw new Error('Shared cage vertex bundle produced incompatible influences.');
+        const existingIndices = indexByBundle.get(bundleIndex);
+        const existingWeights = weightByBundle.get(bundleIndex);
+        if (existingIndices && existingWeights) {
+            if (existingIndices.length !== indices.length || existingWeights.length !== weights.length) {
+                throw new Error('Shared cage vertex bundle mismatch.');
+            }
+            for (let i = 0; i < indices.length; ++i) {
+                if (existingIndices[i] !== indices[i] || existingWeights[i] !== weights[i]) {
+                    throw new Error('Shared cage vertex bundle produced incompatible influences.');
+                }
             }
         } else {
-            influenceByBundle.set(bundleIndex, influences);
+            indexByBundle.set(bundleIndex, indices);
+            weightByBundle.set(bundleIndex, weights);
         }
     }
 
@@ -184,11 +322,12 @@ export function createCageInfluenceMesh (source: Mesh, controlCount: number): Me
             attribute.location,
         ));
 
-        const influence = influenceByBundle.get(bundleIndex);
+        const indices = indexByBundle.get(bundleIndex);
+        const weights = weightByBundle.get(bundleIndex);
         let chunk: Uint8Array;
         let stride = sourceBundle.view.stride;
 
-        if (influence) {
+        if (indices && weights) {
             let packedStride = 0;
             for (const attribute of sourceBundle.attributes) packedStride += FormatInfos[attribute.format].size;
             if (packedStride !== sourceBundle.view.stride) {
@@ -196,15 +335,17 @@ export function createCageInfluenceMesh (source: Mesh, controlCount: number): Me
             }
 
             const sourceStride = sourceBundle.view.stride;
-            stride = sourceStride + 4;
+            stride = sourceStride + 8;
             chunk = new Uint8Array(sourceBundle.view.count * stride);
             for (let vertexIndex = 0; vertexIndex < sourceBundle.view.count; ++vertexIndex) {
                 const srcOffset = vertexIndex * sourceStride;
                 const dstOffset = vertexIndex * stride;
                 chunk.set(sourceBytes.subarray(srcOffset, srcOffset + sourceStride), dstOffset);
-                chunk.set(influence.subarray(vertexIndex * 4, vertexIndex * 4 + 4), dstOffset + sourceStride);
+                chunk.set(indices.subarray(vertexIndex * 4, vertexIndex * 4 + 4), dstOffset + sourceStride);
+                chunk.set(weights.subarray(vertexIndex * 4, vertexIndex * 4 + 4), dstOffset + sourceStride + 4);
             }
-            attributes.push(new Attribute(CAGE_INFLUENCE_ATTRIBUTE, Format.RGBA8, true));
+            attributes.push(new Attribute(CAGE_INDEX_ATTRIBUTE, Format.RGBA8, true));
+            attributes.push(new Attribute(CAGE_WEIGHT_ATTRIBUTE, Format.RGBA8, true));
         } else {
             chunk = new Uint8Array(sourceBytes);
         }
