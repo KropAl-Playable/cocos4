@@ -215,6 +215,8 @@ export class CageDeformer extends Component {
         for (let i = 0; i < materials.length; ++i) {
             const material = this._renderer.getMaterialInstance(i);
             if (!material) continue;
+            const effectName = material.effectAsset?.name || '';
+            if (!effectName.includes('builtin-standard-cage')) continue;
             material.recompileShaders({ USE_CAGE_DEFORM: true });
             this._materialInstances.push(material);
         }
