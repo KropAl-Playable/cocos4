@@ -45,17 +45,18 @@ Playable Tools → AO Baker
 2. Click **Refresh Selection**.
 3. Configure AO.
 4. Click **Preview AO**.
-5. Use **Restore** to return to the source meshes.
-6. Set an existing AssetDB output directory, for example `db://assets`.
-7. Click **Bake Selected**.
+5. **Preview AO** uses a temporary grayscale vertex-color material, so the AO is visible independently of the production material.
+6. Use **Restore** to return both the original mesh and materials.
+7. Set an existing AssetDB output directory, for example `db://assets/Scene/Object/BakedModels`.
+8. Click **Bake Selected**.
 
-Bake creates a new `.mesh` asset through AssetDB, reloads it, and assigns it to the selected renderer.
+Bake writes a generated `.glb` source asset, lets Creator's glTF importer create the real `cc.Mesh` sub-asset, then assigns that Mesh to the selected renderer. This intentionally avoids writing Creator's internal `.mesh` format directly.
 
 ## Important v0.1 limitation
 
-The standard material must actually consume the selected vertex-color channel for the AO to be visible. The baker only writes the data; material integration/debug AO visualization is the next layer.
+The baked production mesh stores AO in the selected vertex-color channel. A production material still needs to consume that channel, but Preview uses an AO-only debug material automatically.
 
-The AssetDB persistence path uses Creator's scene-side `EditorExtends.serialize()` and should be tested on Creator 3.8.8 before relying on it for production assets. Preview is fully non-destructive and does not require asset serialization.
+Persistence goes through Creator's supported glTF/GLB importer rather than the internal `.mesh` importer. The generated GLB currently preserves POSITION, NORMAL, TANGENT, TEXCOORD_0, TEXCOORD_1, COLOR_0 and triangle indices.
 
 ## Current mesh restrictions
 
