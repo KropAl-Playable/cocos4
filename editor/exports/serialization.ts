@@ -11,7 +11,7 @@ export {
 } from '../../cocos/serialization/compiled/builtin-value-type';
 
 
-export { bakeMeshAmbientOcclusion } from '../../cocos/3d/misc/ao-baker';
+export { bakeMeshAmbientOcclusion, createMeshWithAmbientOcclusionValues } from '../../cocos/3d/misc/ao-baker';
 export type {
     AOVertexColorChannel,
     IAOBakeTarget,
