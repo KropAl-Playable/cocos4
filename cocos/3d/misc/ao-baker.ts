@@ -387,8 +387,8 @@ function cloneStaticMeshWithAO (
     if (source.struct.cluster || source.struct.primitives.some((primitive) => primitive.cluster)) {
         throw new Error('AO Baker v0.1 does not support clustered meshes.');
     }
-    if (source.struct.compressed || source.struct.encoded || source.struct.quantized) {
-        throw new Error('AO Baker requires an initialized/decompressed mesh.');
+    if (source.struct.compressed || source.struct.quantized) {
+        throw new Error('AO Baker v0.1 requires a decompressed, non-quantized mesh.');
     }
 
     const originalStruct = source.struct;
@@ -572,6 +572,9 @@ export function bakeMeshAmbientOcclusion (
     for (let i = 0; i < sceneOccluders.length; ++i) {
         if (sceneOccluders[i] !== target) sources.push(sceneOccluders[i]);
     }
+    // Imported mesh assets may still carry encoded metadata until initialization,
+    // while initialize() replaces their CPU-side data with decoded buffers.
+    for (let i = 0; i < sources.length; ++i) sources[i].mesh.initialize();
     const occluders = sources.map(buildOccluder);
 
     const values: Float32Array[] = [];
