@@ -423,7 +423,9 @@ export const methods = {
             const output: ExportedBake[] = [];
             for (const group of groups.values()) {
                 const representative = group[0];
-                const result = bakeMeshAmbientOcclusion(representative.target, [], sharedOptions);
+                // Shared AO is baked in mesh-local space so every instance can reuse
+                // the exact same output regardless of translation/rotation/scale.
+                const result = bakeMeshAmbientOcclusion({ mesh: representative.target.mesh }, [], sharedOptions);
                 output.push({
                     nodeUuids: group.map((item) => item.node.uuid),
                     nodeName: representative.renderer.mesh?.name || representative.node.name,
