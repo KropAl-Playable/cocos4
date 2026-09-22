@@ -128,12 +128,6 @@ module.exports = Editor.Panel.define({
         (this.$.preview as HTMLButtonElement).addEventListener('click', () => void this.runPreview());
         (this.$.restore as HTMLButtonElement).addEventListener('click', () => void this.runRestore());
         (this.$.bake as HTMLButtonElement).addEventListener('click', () => void this.runBake());
-        (this.$.sharingMode as HTMLSelectElement).addEventListener('change', () => {
-            const shared = (this.$.sharingMode as HTMLSelectElement).value === 'shared-source';
-            const sceneOccluders = this.$.sceneOccluders as HTMLInputElement;
-            if (shared) sceneOccluders.checked = false;
-            sceneOccluders.disabled = shared;
-        });
         await this.refreshSelection();
     },
 });
