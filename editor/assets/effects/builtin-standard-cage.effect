@@ -200,7 +200,7 @@ CCProgram surface-vertex %{
     vec3 position = In.position.xyz + CageControlOffset(i0) * w0 + CageControlOffset(i1) * w1;
 
     float countMinusOne = max(cageParams.x - 1.0, 1.0);
-    float height = clamp(float(max(i0, i1)) / countMinusOne, 0.0, 1.0);
+    float height = clamp(float(i0 > i1 ? i0 : i1) / countMinusOne, 0.0, 1.0);
     float phase = In.position.x * 1.7 + In.position.z * 1.3 + cageParams.z * cageParams.w;
     float flutter = sin(phase) * cageParams.y * height * height;
     position.x += flutter;
