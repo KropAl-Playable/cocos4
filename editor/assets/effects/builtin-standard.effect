@@ -128,6 +128,17 @@ CCProgram shared-ubos %{
     vec4 emissive;
     vec4 emissiveScaleParam;
     vec4 anisotropyParam;
+  #if USE_CAGE_DEFORM
+    vec4 cageOffset0;
+    vec4 cageOffset1;
+    vec4 cageOffset2;
+    vec4 cageOffset3;
+    vec4 cageOffset4;
+    vec4 cageOffset5;
+    vec4 cageOffset6;
+    vec4 cageOffset7;
+    vec4 cageParams; // x=count, y=flutter strength, z=time, w=flutter frequency
+  #endif
   };
 }%
 
@@ -137,6 +148,7 @@ CCProgram macro-remapping %{
   #pragma define-meta USE_TWOSIDE
   #pragma define-meta IS_ANISOTROPY
   #pragma define-meta USE_VERTEX_COLOR
+  #pragma define-meta USE_CAGE_DEFORM
   #pragma define-meta FIX_ANISOTROPIC_ROTATION_MAP
 
   #define CC_SURFACES_USE_SECOND_UV HAS_SECOND_UV
@@ -154,6 +166,45 @@ CCProgram macro-remapping %{
 }%
 
 CCProgram surface-vertex %{
+#if USE_CAGE_DEFORM
+  in vec4 a_cageInfluence;
+
+  vec3 CageControlOffset(int index)
+  {
+    if (index <= 0) return cageOffset0.xyz;
+    if (index == 1) return cageOffset1.xyz;
+    if (index == 2) return cageOffset2.xyz;
+    if (index == 3) return cageOffset3.xyz;
+    if (index == 4) return cageOffset4.xyz;
+    if (index == 5) return cageOffset5.xyz;
+    if (index == 6) return cageOffset6.xyz;
+    return cageOffset7.xyz;
+  }
+
+  #define CC_SURFACES_VERTEX_MODIFY_LOCAL_POS
+  vec3 SurfacesVertexModifyLocalPos(in SurfacesStandardVertexIntermediate In)
+  {
+    const float CAGE_INDEX_SCALE = 7.0;
+    int i0 = int(floor(a_cageInfluence.r * CAGE_INDEX_SCALE + 0.5));
+    int i1 = int(floor(a_cageInfluence.g * CAGE_INDEX_SCALE + 0.5));
+
+    float weightSum = max(a_cageInfluence.b + a_cageInfluence.a, 0.0001);
+    float w0 = a_cageInfluence.b / weightSum;
+    float w1 = a_cageInfluence.a / weightSum;
+
+    vec3 offset = CageControlOffset(i0) * w0 + CageControlOffset(i1) * w1;
+    vec3 position = In.position.xyz + offset;
+
+    float countMinusOne = max(cageParams.x - 1.0, 1.0);
+    float height = clamp(float(max(i0, i1)) / countMinusOne, 0.0, 1.0);
+    float phase = In.position.x * 1.7 + In.position.z * 1.3 + cageParams.z * cageParams.w;
+    float flutter = sin(phase) * cageParams.y * height * height;
+    position.x += flutter;
+    position.z += flutter * 0.35;
+
+    return position;
+  }
+#endif
   #define CC_SURFACES_VERTEX_MODIFY_SHADOW_BIAS
   vec2 SurfacesVertexModifyShadowBias(in SurfacesStandardVertexIntermediate In, vec2 originShadowBias)
   {
