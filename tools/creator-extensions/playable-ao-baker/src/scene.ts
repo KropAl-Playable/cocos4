@@ -13,7 +13,7 @@ interface PreviewEntry {
 }
 
 interface ExportedBake {
-    nodeUuid: string;
+    nodeUuids: string[];
     nodeName: string;
     glbBase64: string;
     stats: IAOBakeStats;
@@ -393,11 +393,50 @@ export const methods = {
         return { restored: restorePreviewInternal() };
     },
 
-    exportBakedMeshes(uuids: string[], options: IAOBakeOptions): ExportedBake[] {
+    exportBakedMeshes(
+        uuids: string[],
+        options: IAOBakeOptions,
+        sharingMode: 'per-instance' | 'shared-source' = 'per-instance',
+    ): ExportedBake[] {
         restorePreviewInternal();
+
+        if (sharingMode === 'shared-source') {
+            const selected = selectedTargets(uuids);
+            if (!selected.length) throw new Error('Selection contains no MeshRenderer with a Mesh.');
+
+            // A single baked mesh can only be safely shared when AO is independent
+            // from per-instance surroundings. Force scene occluders off here.
+            const sharedOptions: IAOBakeOptions = {
+                ...options,
+                sceneOccluders: false,
+            };
+            const { bakeMeshAmbientOcclusion } = baker();
+            const groups = new Map<Mesh, typeof selected>();
+
+            for (const item of selected) {
+                const mesh = item.renderer.mesh!;
+                const group = groups.get(mesh);
+                if (group) group.push(item);
+                else groups.set(mesh, [item]);
+            }
+
+            const output: ExportedBake[] = [];
+            for (const group of groups.values()) {
+                const representative = group[0];
+                const result = bakeMeshAmbientOcclusion(representative.target, [], sharedOptions);
+                output.push({
+                    nodeUuids: group.map((item) => item.node.uuid),
+                    nodeName: representative.renderer.mesh?.name || representative.node.name,
+                    glbBase64: exportMeshToGLB(result.mesh).toString('base64'),
+                    stats: result.stats,
+                });
+            }
+            return output;
+        }
+
         const baked = bakeSelection(uuids, options, false);
         return baked.map((item) => ({
-            nodeUuid: item.node.uuid,
+            nodeUuids: [item.node.uuid],
             nodeName: item.node.name,
             glbBase64: exportMeshToGLB(item.result.mesh).toString('base64'),
             stats: item.result.stats,
