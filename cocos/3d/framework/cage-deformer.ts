@@ -57,7 +57,7 @@ export class CageDeformer extends Component {
 
     @property({ type: CCFloat })
     @range([0, 1.5, 0.001])
-    public windStrength = 0.18;
+    public windStrength = 0.12;
 
     @property({ type: CCFloat })
     @range([0, 5, 0.01])
@@ -65,19 +65,19 @@ export class CageDeformer extends Component {
 
     @property({ type: CCFloat })
     @range([0, 100, 0.1])
-    public stiffness = 16;
+    public stiffness = 22;
 
     @property({ type: CCFloat })
     @range([0, 1, 0.001])
-    public damping = 0.9;
+    public damping = 0.86;
 
     @property({ type: CCFloat })
     @range([0, 1.5, 0.001])
-    public maxBendAngle = 0.65;
+    public maxBendAngle = 0.35;
 
     @property({ type: CCFloat })
     @range([0, 1, 0.001])
-    public flutterStrength = 0.015;
+    public flutterStrength = 0.01;
 
     @property({ type: CCFloat })
     @range([0, 20, 0.01])
@@ -93,7 +93,9 @@ export class CageDeformer extends Component {
     private _sourceMesh: Mesh | null = null;
     private _cageMesh: Mesh | null = null;
     private _controlCount = 0;
+    private _trunkCount = 0;
     private _time = 0;
+    private _simulationAccumulator = 0;
 
     private _parents: number[] = [];
     private _restControls: Vec3[] = [];
@@ -108,9 +110,9 @@ export class CageDeformer extends Component {
     private _uniformRotations: Vec4[] = [];
     private _params = new Vec4();
     private _springSettings = {
-        stiffness: 16,
-        damping: 0.9,
-        maxDisplacement: 0.65,
+        stiffness: 22,
+        damping: 0.86,
+        maxDisplacement: 0.35,
     };
     private _materialInstances: ReturnType<MeshRenderer['getMaterialInstance']>[] = [];
 
@@ -132,8 +134,26 @@ export class CageDeformer extends Component {
     protected update(dt: number): void {
         if (EDITOR && !this.previewInEditor) return;
         if (!this._renderer || !this._cageMesh || this._controlCount < 2) return;
-        this._time += Math.max(0, Math.min(dt, 0.05));
 
+        // Fixed-step control simulation keeps browser preview and editor preview
+        // visually consistent even when their edit-mode tick rates differ.
+        const frameDt = Math.max(0, Math.min(dt, 0.1));
+        this._simulationAccumulator = Math.min(this._simulationAccumulator + frameDt, 0.1);
+        const fixedDt = 1 / 60;
+        let steps = 0;
+        while (this._simulationAccumulator >= fixedDt && steps < 6) {
+            this._simulateStep(fixedDt);
+            this._simulationAccumulator -= fixedDt;
+            ++steps;
+        }
+
+        this._updateHierarchy();
+        this._uploadControls();
+        if (this.debugDraw) this._drawDebug();
+    }
+
+    private _simulateStep(dt: number): void {
+        this._time += dt;
         this._springSettings.stiffness = this.stiffness;
         this._springSettings.damping = this.damping;
         this._springSettings.maxDisplacement = this.maxBendAngle;
@@ -142,16 +162,38 @@ export class CageDeformer extends Component {
         this._angularVelocities[0].set(0, 0, 0);
         this._angleTargets[0].set(0, 0, 0);
 
+        const basePhase = this._time * this.windFrequency * Math.PI * 2;
+        const trunkSegments = Math.max(1, this._trunkCount - 1);
+
         for (let i = 1; i < this._controlCount; ++i) {
-            const height = this._normalizedControlHeight(i);
-            const branchBoost = this._parents[i] >= 0 && this._parents[i] < i - 1 ? 1.2 : 1.0;
-            const amplitude = this.windStrength * height * height * branchBoost;
-            const phase = this._time * this.windFrequency * Math.PI * 2 - i * 0.31;
-            this._angleTargets[i].set(
-                Math.cos(phase * 0.73) * amplitude * 0.35,
-                0,
-                -Math.sin(phase) * amplitude,
-            );
+            const isTrunk = i < this._trunkCount;
+            if (isTrunk) {
+                const height = i / Math.max(1, this._trunkCount - 1);
+                // All trunk segments bend in the same broad direction. Each local
+                // segment contributes only a fraction of the total bend, so the
+                // accumulated hierarchy forms a smooth arc instead of soft shearing.
+                const localAmplitude = this.windStrength
+                    * (0.30 + 0.70 * height)
+                    / trunkSegments;
+                const laggedPhase = basePhase - height * 0.08;
+                this._angleTargets[i].set(
+                    Math.cos(laggedPhase * 0.67) * localAmplitude * 0.22,
+                    0,
+                    -Math.sin(laggedPhase) * localAmplitude,
+                );
+            } else {
+                // Crown controls inherit the trunk motion from their parent. Their
+                // own local rotation is intentionally subtle secondary motion only.
+                const branchIndex = i - this._trunkCount;
+                const branchPhase = basePhase - 0.14 - branchIndex * 0.11;
+                const branchAmplitude = this.windStrength * 0.16;
+                this._angleTargets[i].set(
+                    Math.cos(branchPhase * 0.79) * branchAmplitude * 0.35,
+                    0,
+                    -Math.sin(branchPhase) * branchAmplitude,
+                );
+            }
+
             stepCageSpring(
                 this._bendAngles[i],
                 this._angularVelocities[i],
@@ -160,10 +202,6 @@ export class CageDeformer extends Component {
                 dt,
             );
         }
-
-        this._updateHierarchy();
-        this._uploadControls();
-        if (this.debugDraw) this._drawDebug();
     }
 
     public addImpulse(worldPosition: Vec3, direction: Vec3, strength: number, radius = 2): void {
@@ -205,6 +243,8 @@ export class CageDeformer extends Component {
 
         const layout = buildDefaultCageLayout(this._sourceMesh, count);
         this._parents = layout.parents.slice();
+        this._trunkCount = layout.trunkCount;
+        this._simulationAccumulator = 0;
 
         this._restControls.length = count;
         this._bendAngles.length = count;
@@ -317,17 +357,26 @@ export class CageDeformer extends Component {
 
     private _drawDebug(): void {
         const root = cclegacy.director.root as any;
-        const geometryRenderer = root?.pipeline?.geometryRenderer;
-        if (!geometryRenderer) return;
+        const cameras = root?.cameraList as any[] | undefined;
+        if (!cameras?.length) return;
 
-        for (let i = 0; i < this._controlCount; ++i) {
-            Vec3.transformMat4(_worldControl, this._globalPositions[i], this.node.worldMatrix);
-            geometryRenderer.addCross(_worldControl, 0.08, DEBUG_COLOR, true);
-            const parent = this._parents[i];
-            if (parent >= 0) {
-                Vec3.transformMat4(_debugPrevious, this._globalPositions[parent], this.node.worldMatrix);
-                geometryRenderer.addLine(_debugPrevious, _worldControl, DEBUG_COLOR, true);
+        // GeometryRenderer moved to Camera; WebPipeline.geometryRenderer is an
+        // unimplemented compatibility getter in Cocos 4 and must not be touched.
+        for (const camera of cameras) {
+            camera.initGeometryRenderer?.();
+            const geometryRenderer = camera.geometryRenderer;
+            if (!geometryRenderer) continue;
+
+            for (let i = 0; i < this._controlCount; ++i) {
+                Vec3.transformMat4(_worldControl, this._globalPositions[i], this.node.worldMatrix);
+                geometryRenderer.addCross(_worldControl, 0.08, DEBUG_COLOR, true);
+                const parent = this._parents[i];
+                if (parent >= 0) {
+                    Vec3.transformMat4(_debugPrevious, this._globalPositions[parent], this.node.worldMatrix);
+                    geometryRenderer.addLine(_debugPrevious, _worldControl, DEBUG_COLOR, true);
+                }
             }
         }
     }
+
 }
