@@ -69,3 +69,10 @@ Persistence goes through Creator's supported glTF/GLB importer rather than the i
 - no pre-existing vertex color attribute
 
 These restrictions are deliberate for v0.1 so a bake cannot silently corrupt production mesh data.
+
+
+## Shared mesh baking
+
+For repeated objects such as trees, use **Mesh Sharing → Shared by source mesh**. The extension groups selected renderers by their original source `Mesh`, bakes AO for each instance in world space, averages the per-vertex AO values, then exports only one baked GLB/cc.Mesh for the whole group.
+
+This preserves mesh reuse and avoids multiplying geometry size. With **Scene Occluders** enabled, the shared result is an averaged approximation of the instances' surroundings. Disable **Scene Occluders** for a pure reusable self-AO asset.
