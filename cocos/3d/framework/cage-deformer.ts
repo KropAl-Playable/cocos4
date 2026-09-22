@@ -16,6 +16,8 @@ const _inverseWorld = new Mat4();
 const _localDirection = new Vec3();
 const _worldControl = new Vec3();
 const _localPoint = new Vec3();
+const _debugPrevious = new Vec3();
+const DEBUG_COLOR = new Color(0, 255, 255, 255);
 
 const MESH_CACHE = new WeakMap<Mesh, Map<number, Mesh>>();
 
@@ -91,6 +93,7 @@ export class CageDeformer extends Component {
     private _targets: Vec3[] = [];
     private _restControls: Vec3[] = [];
     private _uniformOffsets: Vec4[] = [];
+    private _params = new Vec4();
     private _materialInstances: ReturnType<MeshRenderer['getMaterialInstance']>[] = [];
 
     protected onEnable(): void {
@@ -227,10 +230,8 @@ export class CageDeformer extends Component {
                 }
                 const paramsHandle = pass.getHandle('cageParams');
                 if (paramsHandle) {
-                    this._uniformOffsets[0].w = this._controlCount;
-                    const params = new Vec4(this._controlCount, this.flutterStrength, this._time, this.flutterFrequency);
-                    pass.setUniform(paramsHandle, params);
-                    this._uniformOffsets[0].w = 0;
+                    this._params.set(this._controlCount, this.flutterStrength, this._time, this.flutterFrequency);
+                    pass.setUniform(paramsHandle, this._params);
                 }
             }
         }
@@ -240,16 +241,15 @@ export class CageDeformer extends Component {
         const root = cclegacy.director.root as any;
         const geometryRenderer = root?.pipeline?.geometryRenderer;
         if (!geometryRenderer) return;
-        const color = Color.CYAN;
+        const color = DEBUG_COLOR;
         for (let i = 0; i < this._controlCount; ++i) {
             Vec3.add(_localPoint, this._restControls[i], this._offsets[i]);
             Vec3.transformMat4(_worldControl, _localPoint, this.node.worldMatrix);
             geometryRenderer.addCross(_worldControl, 0.08, color, true);
             if (i > 0) {
                 Vec3.add(_localPoint, this._restControls[i - 1], this._offsets[i - 1]);
-                const previous = new Vec3();
-                Vec3.transformMat4(previous, _localPoint, this.node.worldMatrix);
-                geometryRenderer.addLine(previous, _worldControl, color, true);
+                Vec3.transformMat4(_debugPrevious, _localPoint, this.node.worldMatrix);
+                geometryRenderer.addLine(_debugPrevious, _worldControl, color, true);
             }
         }
     }
