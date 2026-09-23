@@ -20,8 +20,10 @@ const ATTRIBUTE = {
     TEXCOORD0: 'a_texCoord',
     TEXCOORD1: 'a_texCoord1',
     COLOR0: 'a_color',
-    COLOR1: 'a_color1',
-    COLOR2: 'a_color2',
+    TEXCOORD2: 'a_texCoord2',
+    TEXCOORD3: 'a_texCoord3',
+    TEXCOORD4: 'a_texCoord4',
+    TEXCOORD5: 'a_texCoord5',
 };
 
 function engine(): typeof import('cc') {
@@ -160,6 +162,25 @@ function exportMeshToGLB(mesh: Mesh): Buffer {
         }
     };
 
+    const addTexCoordAttribute = (
+        primitiveIndex: number,
+        attributeName: string,
+        semantic: string,
+        attributes: Record<string, number>,
+    ): void => {
+        const raw = mesh.readAttribute(primitiveIndex, attributeName as any);
+        if (!raw) return;
+        const count = Math.floor(raw.length / 2);
+        if (!count) return;
+        if (raw instanceof Uint8Array) {
+            attributes[semantic] = append(raw, 5121, count, 'VEC2', 34962, true);
+        } else if (raw instanceof Uint16Array) {
+            attributes[semantic] = append(raw, 5123, count, 'VEC2', 34962, true);
+        } else {
+            attributes[semantic] = append(asFloat32(raw), 5126, count, 'VEC2', 34962);
+        }
+    };
+
     for (let primitiveIndex = 0; primitiveIndex < mesh.struct.primitives.length; ++primitiveIndex) {
         const positionsRaw = mesh.readAttribute(primitiveIndex, ATTRIBUTE.POSITION as any);
         const normalsRaw = mesh.readAttribute(primitiveIndex, ATTRIBUTE.NORMAL as any);
@@ -180,11 +201,18 @@ function exportMeshToGLB(mesh: Mesh): Buffer {
         addFloatAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD0, 'TEXCOORD_0', 2, attributes);
         addFloatAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD1, 'TEXCOORD_1', 2, attributes);
         addColorAttribute(primitiveIndex, ATTRIBUTE.COLOR0, 'COLOR_0', attributes);
-        addColorAttribute(primitiveIndex, ATTRIBUTE.COLOR1, 'COLOR_1', attributes);
-        addColorAttribute(primitiveIndex, ATTRIBUTE.COLOR2, 'COLOR_2', attributes);
+        addTexCoordAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD2, 'TEXCOORD_2', attributes);
+        addTexCoordAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD3, 'TEXCOORD_3', attributes);
+        addTexCoordAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD4, 'TEXCOORD_4', attributes);
+        addTexCoordAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD5, 'TEXCOORD_5', attributes);
 
-        if (attributes.COLOR_1 === undefined || attributes.COLOR_2 === undefined) {
-            throw new Error('Cage bake did not produce COLOR_1 / COLOR_2 influence streams.');
+        if (
+            attributes.TEXCOORD_2 === undefined
+            || attributes.TEXCOORD_3 === undefined
+            || attributes.TEXCOORD_4 === undefined
+            || attributes.TEXCOORD_5 === undefined
+        ) {
+            throw new Error('Cage bake did not produce TEXCOORD_2..5 influence streams.');
         }
 
         const primitive: any = { attributes, mode: 4 };
