@@ -1,39 +1,47 @@
 # COCOS 4 Playable Runtime — Experimental Roadmap
 
-Goal: extend a local COCOS 4 fork for highly visual, highly interactive playable ads under a ~5 MB delivery budget.
+Goal: extend the local COCOS 4 fork with unusually rich visuals and interaction while respecting the extreme constraints of playable ads.
 
-The first experiments are deliberately narrow:
+The central optimization target is:
 
-1. **AO Baker** — editor/offline ambient-occlusion baking with near-zero runtime cost.
-2. **Cage Deform** — lightweight GPU-driven deformation for trees/vegetation, initially for wind and impulses.
+> **visual / physical information per byte**
 
-This repository should remain compatible with stock Cocos Creator 3.8.8 while the experiments are developed.
+Rather than turning Cocos into a general-purpose heavyweight engine, this project adds narrowly scoped systems that are unusually valuable for playable production.
+
+## Current roadmap
+
+| Order | System | State |
+|---:|---|---|
+| 1 | AO / lighting baker | ✅ working v0.1 |
+| 2 | Cage deformation | 🟡 nearly complete v0.1 |
+| 3 | Advanced water + buoyancy | ⏭ next |
+| 4 | Havok backend | planned |
+| 5 | GPU particles | planned |
+| 6 | GPU-driven VFX / compute | planned |
+| 7 | SDF collision / VFX | research |
+| 8 | GPU culling / indirect rendering | research |
+
+AO and Cage establish reusable patterns for editor/offline baking, compact vertex-data transport, shared derived meshes, GPU deformation, small CPU simulation proxies, isolated opt-in shaders and WebGL-safe fallbacks.
+
+Before moving fully into Water, Cage v0.1 still needs a short integration pass: persistent authoring/bake flow, debug tooling and Vertex AO support in the cage material.
 
 ## Core principles
 
 - Prefer **offline baking** over runtime post-processing.
-- Prefer **vertex data / procedural math** over new textures.
-- Prefer **GPU deformation** over per-vertex CPU updates.
-- Keep WebGL compatibility unless a feature explicitly targets WebGPU.
-- Never regress the built-in renderer or physics path.
-- Every feature must be measurable in:
-  - HTML/build size delta;
-  - CPU frame cost;
-  - GPU frame cost;
-  - memory delta;
-  - visual benefit.
-- Build experimental features behind explicit switches.
+- Prefer **procedural math and vertex data** over large textures.
+- Prefer **GPU work** when data naturally lives per vertex/particle.
+- When gameplay needs the same phenomenon, use a **small analytical CPU proxy** instead of GPU readback.
+- Preserve WebGL compatibility unless a feature explicitly targets WebGPU.
+- Keep experimental systems opt-in.
+- Never regress the stock renderer or physics path.
+- Measure HTML/build size, compressed size, startup, CPU/GPU cost, memory and visual/gameplay benefit.
 
-## Suggested development order
+## Documents
 
-1. Establish fork/repository workflow.
-2. Add benchmark/demo scene and measurement checklist.
-3. Implement AO Baker v0.1 using vertex colors.
-4. Validate AO on an existing production scene.
-5. Implement Cage Deform v0.1 using a simplified control hierarchy.
-6. Add procedural wind.
-7. Add spring response and external impulses.
-8. Compare baseline vs procedural wind vs cage wind vs cage + interaction.
-9. Only after validation, consider tetrahedral interpolation and general-purpose deformation.
-
-See the other Markdown files in this directory for detailed instructions.
+- ARCHITECTURE.md — shared architecture and system boundaries.
+- ROADMAP.md — full ordered roadmap and decision gates.
+- TASK_001_AO_BAKER.md — AO implementation.
+- TASK_002_CAGE_DEFORM.md — Cage deformation.
+- TASK_003_ADVANCED_WATER_BUOYANCY.md — next major task.
+- TEST_PLAN.md — benchmark/acceptance methodology.
+- GIT_WORKFLOW.md / AGENTS.md / CLAUDE.md — repository and agent workflow.
