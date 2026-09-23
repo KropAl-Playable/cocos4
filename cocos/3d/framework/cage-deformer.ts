@@ -9,7 +9,7 @@ import { Color, Mat4, Quat, Vec3, Vec4, _decorator, CCBoolean, CCFloat, CCIntege
 import { Component } from '../../scene-graph';
 import { Mesh } from '../assets/mesh';
 import { MeshRenderer } from './mesh-renderer';
-import { buildDefaultCageLayout, createCageInfluenceMesh, MAX_CAGE_CONTROLS, stepCageSpring } from '../misc/cage-deform';
+import { buildDefaultCageLayout, createCageInfluenceMesh, hasCageInfluenceData, MAX_CAGE_CONTROLS, stepCageSpring } from '../misc/cage-deform';
 
 const { ccclass, executeInEditMode, menu, property, requireComponent, range } = _decorator;
 
@@ -26,6 +26,10 @@ const DEBUG_COLOR = new Color(0, 255, 255, 255);
 const MESH_CACHE = new WeakMap<Mesh, Map<number, Mesh>>();
 
 function getCageMesh(source: Mesh, controlCount: number): Mesh {
+    // Offline/editor-baked meshes can be consumed directly. Runtime generation
+    // remains as a fallback for prototypes and legacy scenes.
+    if (hasCageInfluenceData(source)) return source;
+
     let variants = MESH_CACHE.get(source);
     if (!variants) {
         variants = new Map<number, Mesh>();
