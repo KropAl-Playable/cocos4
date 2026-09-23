@@ -20,10 +20,8 @@ const ATTRIBUTE = {
     TEXCOORD0: 'a_texCoord',
     TEXCOORD1: 'a_texCoord1',
     COLOR0: 'a_color',
-    TEXCOORD2: 'a_texCoord2',
-    TEXCOORD3: 'a_texCoord3',
-    TEXCOORD4: 'a_texCoord4',
-    TEXCOORD5: 'a_texCoord5',
+    JOINTS0: 'a_joints',
+    WEIGHTS0: 'a_weights',
 };
 
 function engine(): typeof import('cc') {
@@ -162,22 +160,26 @@ function exportMeshToGLB(mesh: Mesh): Buffer {
         }
     };
 
-    const addTexCoordAttribute = (
+    const addCageAttribute = (
         primitiveIndex: number,
         attributeName: string,
-        semantic: string,
+        semantic: 'JOINTS_0' | 'WEIGHTS_0',
         attributes: Record<string, number>,
     ): void => {
         const raw = mesh.readAttribute(primitiveIndex, attributeName as any);
         if (!raw) return;
-        const count = Math.floor(raw.length / 2);
+        const count = Math.floor(raw.length / 4);
         if (!count) return;
-        if (raw instanceof Uint8Array) {
-            attributes[semantic] = append(raw, 5121, count, 'VEC2', 34962, true);
-        } else if (raw instanceof Uint16Array) {
-            attributes[semantic] = append(raw, 5123, count, 'VEC2', 34962, true);
+
+        if (semantic === 'JOINTS_0') {
+            const data = raw instanceof Uint8Array ? raw : Uint8Array.from(raw as ArrayLike<number>);
+            attributes[semantic] = append(data, 5121, count, 'VEC4', 34962, false);
         } else {
-            attributes[semantic] = append(asFloat32(raw), 5126, count, 'VEC2', 34962);
+            if (raw instanceof Uint8Array) {
+                attributes[semantic] = append(raw, 5121, count, 'VEC4', 34962, true);
+            } else {
+                attributes[semantic] = append(asFloat32(raw), 5126, count, 'VEC4', 34962);
+            }
         }
     };
 
@@ -201,18 +203,11 @@ function exportMeshToGLB(mesh: Mesh): Buffer {
         addFloatAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD0, 'TEXCOORD_0', 2, attributes);
         addFloatAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD1, 'TEXCOORD_1', 2, attributes);
         addColorAttribute(primitiveIndex, ATTRIBUTE.COLOR0, 'COLOR_0', attributes);
-        addTexCoordAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD2, 'TEXCOORD_2', attributes);
-        addTexCoordAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD3, 'TEXCOORD_3', attributes);
-        addTexCoordAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD4, 'TEXCOORD_4', attributes);
-        addTexCoordAttribute(primitiveIndex, ATTRIBUTE.TEXCOORD5, 'TEXCOORD_5', attributes);
+        addCageAttribute(primitiveIndex, ATTRIBUTE.JOINTS0, 'JOINTS_0', attributes);
+        addCageAttribute(primitiveIndex, ATTRIBUTE.WEIGHTS0, 'WEIGHTS_0', attributes);
 
-        if (
-            attributes.TEXCOORD_2 === undefined
-            || attributes.TEXCOORD_3 === undefined
-            || attributes.TEXCOORD_4 === undefined
-            || attributes.TEXCOORD_5 === undefined
-        ) {
-            throw new Error('Cage bake did not produce TEXCOORD_2..5 influence streams.');
+        if (attributes.JOINTS_0 === undefined || attributes.WEIGHTS_0 === undefined) {
+            throw new Error('Cage bake did not produce JOINTS_0 / WEIGHTS_0 influence streams.');
         }
 
         const primitive: any = { attributes, mode: 4 };
