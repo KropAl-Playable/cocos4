@@ -1,26 +1,23 @@
 # Test and Benchmark Plan
 
-## Baseline scene
+## Baseline
 
-Use one existing playable project containing trees.
-
-Record the exact project revision and engine revision.
+Maintain representative playable scenes for the systems being tested and record exact project/engine revisions.
 
 ## Devices
 
 At minimum:
 
 - desktop development machine;
-- one representative iPhone;
-- one mid/low Android device when available.
-
-For playable ads, also validate inside the closest available WebView/ad-network environment.
+- representative iPhone/Safari/WebView;
+- mid/low Android device when available;
+- closest available ad-network WebView environment.
 
 ## Metrics
 
 For every experiment record:
 
-```text
+~~~text
 Engine revision
 Feature configuration
 HTML size
@@ -33,102 +30,83 @@ Draw calls
 Triangles
 Texture memory if available
 JS heap if useful
-Visual notes
-```
+Visual/gameplay notes
+~~~
 
 ## AO tests
 
-### Correctness
+Verify isolated meshes, ground contact, nearby occluders, concave geometry, repeated shared meshes and tree trunk/crown cases.
 
-- isolated mesh;
-- mesh resting on ground;
-- two nearby meshes;
-- concave geometry;
-- tree trunk + crown.
+Compare 16/32/64 samples and check noise, banding, self-shadowing and ray-bias artifacts.
 
-### Quality
-
-Compare sample counts:
-
-```text
-16
-32
-64
-```
-
-Check noise, banding, excessive self-shadowing, and ray-bias artifacts.
-
-### Data
-
-Verify:
-
-- channel is preserved after save/reload;
-- channel is preserved in production build;
-- other vertex channels are unchanged;
-- mesh compression pipeline does not destroy AO usefulness.
+Verify AO survives save/reload/build, shared meshes remain shared, other channels are preserved, cage/custom materials consume the same AO convention, and compression/import keeps useful precision.
 
 ## Cage tests
 
-### Static correctness
+With wind/flutter/impulse disabled, deformed mesh should match rest mesh within expected precision.
 
-With zero wind and zero impulse:
+Test 1/10/30/100 trees where practical and verify root stability, trunk arc, crown secondary motion, editor/browser consistency and variable frame rate.
 
-```text
-deformed mesh == rest mesh
-```
+Impulse cases:
 
-within expected precision.
-
-### Wind
-
-Test:
-
-```text
-1 tree
-10 trees
-30 trees
-100 trees
-```
-
-as applicable to the scene.
-
-### Impulse
-
-Test:
-
-- impulse at trunk;
-- impulse near crown;
+- trunk;
+- crown;
 - outside radius;
 - repeated impulses;
 - extreme strength;
-- variable frame rate.
+- moving vehicle pass-by.
 
-### Failure cases
+Failure cases:
 
 - missing cage data;
 - incompatible mesh;
-- material without cage shader support;
+- material without cage support;
 - component disabled;
 - object scaled/rotated;
-- duplicated/prefab instances.
+- duplicated/prefab/shared instances.
+
+## Water tests
+
+### CPU/GPU surface agreement
+
+Place debug markers at fixed and moving X/Z positions. CPU-sampled height should visually match the rendered low-frequency surface.
+
+Test t=0, long-running time, negative/large coordinates and moving samples.
+
+### Buoyancy
+
+Test:
+
+~~~text
+1-point object
+2-point object
+4-point raft
+4–8 point vehicle/boat
+~~~
+
+Validate float height, pitch/roll, damping, entry/exit from water, variable dt and extreme wave amplitudes.
+
+### Quality tiers
+
+Compare LOW / MEDIUM / HIGH where implemented. The gameplay surface must remain identical across tiers.
+
+### Wake / impulse
+
+Validate bounded ripple/wake sources, lifetime cleanup and visual falloff.
 
 ## Comparison table
 
-Maintain results like:
-
-| Variant | Size Δ | CPU ms | GPU ms | FPS | Visual result |
+| Variant | Size Δ | CPU ms | GPU ms | FPS | Visual/gameplay result |
 |---|---:|---:|---:|---:|---|
 | Baseline | 0 | | | | |
 | AO | | | | | |
 | Vertex wind | | | | | |
 | Cage wind | | | | | |
 | Cage + impulse | | | | | |
+| Water LOW | | | | | |
+| Water MEDIUM | | | | | |
+| Water + buoyancy | | | | | |
 
-## Decision rule
+## Promotion rule
 
-Do not promote an experiment into the reusable playable toolkit unless:
-
-- the visual gain is obvious in a side-by-side test;
-- the build-size delta is acceptable;
-- low/mid-tier devices remain usable;
-- fallback behavior is reliable.
+Do not promote an experiment into the reusable playable toolkit unless the visual/gameplay gain is obvious, compressed build-size delta is acceptable, low/mid-tier devices remain usable, fallback behavior is reliable, authoring is practical and target WebView compatibility is acceptable.
