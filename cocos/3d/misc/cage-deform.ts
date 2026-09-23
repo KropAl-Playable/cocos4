@@ -25,6 +25,19 @@ export interface ICageLayout {
     trunkCount: number;
 }
 
+export function hasCageInfluenceData (mesh: Mesh): boolean {
+    mesh.initialize();
+    let hasIndices = false;
+    let hasWeights = false;
+    for (const bundle of mesh.struct.vertexBundles) {
+        for (const attribute of bundle.attributes) {
+            if (attribute.name === CAGE_INDEX_ATTRIBUTE) hasIndices = true;
+            if (attribute.name === CAGE_WEIGHT_ATTRIBUTE) hasWeights = true;
+        }
+    }
+    return hasIndices && hasWeights;
+}
+
 function clampControlCount (controlCount: number): number {
     return Math.max(2, Math.min(MAX_CAGE_CONTROLS, Math.floor(controlCount)));
 }
