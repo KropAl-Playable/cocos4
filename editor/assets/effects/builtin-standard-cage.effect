@@ -447,6 +447,11 @@ CCProgram surface-fragment %{
       baseColor.a *= FSInput_vertexColor.a;
     #endif
 
+    #if USE_VERTEX_AO
+      float vertexAO = GetVertexAO();
+      baseColor.rgb *= mix(1.0, vertexAO, clamp(vertexAOExtra.x, 0.0, 1.0));
+    #endif
+
     #if USE_ALBEDO_MAP
       vec4 texColor = texture(albedoMap, ALBEDO_UV);
       texColor.rgb = SRGBToLinear(texColor.rgb);
@@ -546,6 +551,11 @@ CCProgram surface-fragment %{
     #endif
     #if USE_OCCLUSION_MAP
       pbr.x = mix(1.0, texture(occlusionMap, DEFAULT_UV).OCCLUSION_CHANNEL, pbrParams.x);
+    #endif
+
+    #if USE_VERTEX_AO
+      float vertexAO = GetVertexAO();
+      pbr.x *= mix(1.0, vertexAO, clamp(vertexAOParams.w, 0.0, 1.0));
     #endif
 
     return pbr;
