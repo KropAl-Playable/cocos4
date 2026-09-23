@@ -2,106 +2,166 @@
 
 ## Experimental layer
 
-The experiments should conceptually sit above or beside existing Cocos systems rather than replacing them.
+The playable-runtime additions should sit above or beside existing Cocos systems rather than replacing them.
 
-```text
+~~~text
 Cocos Creator Editor
         |
-        +-- Playable Bake Tools
+        +-- Playable Bake / Authoring Tools
         |      +-- AO Baker
-        |      +-- future masks/light bake tools
+        |      +-- Cage Baker / control authoring
+        |      +-- future packed masks/light tools
         |
-        +-- Scene / Components
-               +-- CageDeformer
-               +-- WindField / impulse source
+        +-- Runtime Components
+        |      +-- CageDeformer
+        |      +-- WaterSurface / WaterWaveProfile
+        |      +-- WaterBuoyancy
+        |      +-- future physics / VFX helpers
+        |
+        +-- Opt-in Effects
+               +-- standard + Vertex AO
+               +-- standard + Cage + Vertex AO
+               +-- advanced water
                        |
                        v
                  Cocos Renderer
                        |
                        v
                      GFX
-```
+~~~
 
 ## Shared design target
 
-Both initial systems should exploit existing mesh data whenever possible.
+The project optimizes for **visual / physical information per byte**.
 
-Potential vertex-data packing:
+Preferred data sources, roughly in order:
 
-```text
+~~~text
+procedural math
+→ existing vertex attributes
+→ compact additional vertex attributes
+→ tiny shared LUT/noise textures
+→ larger textures only when clearly justified
+~~~
+
+## Packed vertex data
+
+Candidate production contract:
+
+~~~text
 COLOR.r = baked AO
-COLOR.g = wind influence
-COLOR.b = branch/random variation
+COLOR.g = wind / deformation mask
+COLOR.b = material/random variation
 COLOR.a = reserved/general mask
-```
+~~~
 
-Do not hard-code this packing globally yet. Introduce an explicit configuration/contract so production assets with vertex colors remain supported.
+Cage currently needs dedicated compact influence attributes:
+
+~~~text
+a_cageIndices : RGBA8
+a_cageWeights : RGBA8
+~~~
+
+Do not globally reserve all channels yet. Materials must explicitly declare the packed-data contract they consume.
 
 ## AO ownership
 
 AO is an **editor/offline process**.
 
-Runtime responsibilities should be limited to reading a baked attribute or texture and applying it in a material/shader.
+Runtime responsibility is limited to reading packed AO and applying a controllable response in the material.
 
-No runtime ray tracing, SSAO, or scene capture is part of v0.1.
+All relevant custom materials, including cage materials, should support the same Vertex AO convention.
 
 ## Cage ownership
 
-Cage deformation consists of three distinct layers:
+Cage deformation has three separable layers:
 
-```text
+~~~text
 Author/Bake
-  -> compute vertex influence data
+  → control layout + vertex influences
 
 Simulation
-  -> update a small set of control points
+  → update a tiny hierarchy of rotational controls
 
 Rendering
-  -> deform the final mesh in the vertex stage
-```
+  → dense vertex deformation on GPU
+~~~
 
-Keep these layers separable.
+The public runtime API should remain stable even if the influence representation changes later.
 
-### v0.1 representation
+Generalized tetrahedral cages remain a research follow-up.
 
-Do not begin with full tetrahedral-cage interpolation.
+## Water ownership
 
-Start with a lightweight control hierarchy / deformation skeleton:
+Water deliberately uses a **dual representation**:
 
-```text
-root
-  |
-trunk_low
-  |
-trunk_high
- /   |   \
-L   crown  R
-```
+~~~text
+        WaterWaveProfile
+          /          \
+         /            \
+        v              v
+GPU renderer       CPU sampler
+visual detail      gameplay surface
+~~~
 
-Each render vertex receives a small number of influences.
+The low-frequency analytical waves are shared conceptually by both sides.
 
-This validates:
+GPU responsibilities:
 
-- mesh data transport;
-- shader deformation;
-- wind response;
-- impulse response;
-- performance.
+- surface displacement;
+- visual normals/detail;
+- Fresnel/specular;
+- foam/wakes;
+- optional cheap reflection/refraction features.
 
-A later version may replace the influence model with tetrahedral barycentric interpolation without changing the public component API.
+CPU responsibilities:
 
-## Runtime budget
+- evaluate low-frequency wave height;
+- evaluate low-frequency normal;
+- optional water velocity;
+- supply buoyancy/gameplay queries.
 
-Target for vegetation prototype:
+No GPU readback. Visual-only high-frequency detail must not affect gameplay collision/buoyancy.
 
-- 5–15 control points/tree;
-- no per-vertex CPU update;
-- one compact control buffer/uniform payload per tree or batch;
-- zero or near-zero allocations per frame;
-- deterministic fallback to undeformed/static rendering.
+## Future physics ownership
 
-## Compatibility
+Physics backends remain behind the existing Cocos selector/adapter model.
 
-The first implementation must work on the existing WebGL rendering path.
+Havok, if added, is optional rather than a dependency of Cage, Water or VFX.
 
-WebGPU-specific compute can be added later as an optional accelerator, not as a prerequisite.
+~~~text
+WaterBuoyancy
+      |
+      +-- transform-only/simple-body path
+      |
+      +-- existing physics adapter
+      |
+      +-- future Havok adapter
+~~~
+
+## GPU simulation ownership
+
+GPU particles and later compute/VFX systems should initially run **beside** the renderer rather than replacing GFX or the full rendering architecture.
+
+Target:
+
+~~~text
+existing renderer
+      +
+custom GPU simulation/pass layer
+~~~
+
+WebGPU can add richer compute paths later, while WebGL remains a required playable fallback.
+
+## Runtime budget philosophy
+
+Typical systems should aim for:
+
+- zero per-vertex CPU updates;
+- zero or near-zero per-frame allocations;
+- shared geometry/material data wherever possible;
+- bounded control/sample counts;
+- deterministic quality tiers;
+- explicit static/fallback mode.
+
+Every new runtime system must be benchmarked against its visual/gameplay benefit.
