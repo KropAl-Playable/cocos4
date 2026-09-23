@@ -78,13 +78,37 @@ The equations and parameter conventions must be documented once to avoid CPU/GPU
 
 ## Shader architecture
 
-Suggested isolated effect:
+Do **not** start from a new water shader from scratch.
+
+COCOS 4 already contains:
 
 ~~~text
-builtin-standard-water.effect
+editor/assets/effects/advanced/water.effect
 ~~~
 
-Do not patch global builtin-standard.
+This should be the visual baseline for Task 003. It already provides the useful presentation layer:
+
+- standard Surface Shader / PBR lighting integration;
+- water IOR (1.33);
+- Fresnel control;
+- dual animated normal maps;
+- roughness/specular response;
+- optional water scattering / in-scattering;
+- opaque and transparent techniques;
+- reflection-map/shadow pipeline integration.
+
+Task 003 should extend or fork this existing Advanced Water effect rather than duplicate it.
+
+The missing systems we actually need are:
+
+1. **large-scale analytical vertex displacement** shared with CPU;
+2. **analytical large-wave normals** that remain consistent with displacement;
+3. a shared WaterWaveProfile / runtime parameter source;
+4. CPU sampleWater() implementation;
+5. buoyancy;
+6. bounded wake/ripple hooks.
+
+Keep the stock Advanced Water effect intact and create an opt-in derived/forked effect for playable-runtime experiments if modification is required.
 
 ### Vertex stage
 
@@ -320,8 +344,34 @@ CPU height should track the rendered low-frequency surface closely.
 - system can be disabled without affecting unrelated rendering;
 - build-size increase is acceptable for a playable.
 
+## Houdini / Zeno liquid VAT
+
+COCOS also ships VAT playback effects for pre-baked DCC simulations:
+
+~~~text
+util/dcc/vat/houdini-fluid-v3-liquid
+util/dcc/vat/zeno-fluid-liquid
+~~~
+
+These are **not runtime liquid solvers**.
+
+The fluid is simulated offline in Houdini or Zeno and exported as Vertex Animation Texture data. Cocos then reconstructs/playbacks that baked mesh animation on the GPU from position/normal textures plus metadata.
+
+This can reproduce visually complex splashes, pours, collapsing fluid meshes and other fixed simulations at low runtime CPU cost, but:
+
+- the motion is predetermined;
+- it is not interactive fluid simulation;
+- arbitrary gameplay forces cannot change the simulation;
+- VAT textures can be expensive for a ~5 MB playable;
+- CPU buoyancy cannot query the VAT surface cheaply in the general case.
+
+VAT liquid is therefore useful as a separate **cinematic/VFX asset path**, not as the foundation of Water + Buoyancy.
+
+A later experiment may benchmark very short, aggressively compressed VAT liquid clips for hero moments.
+
 ## Out of scope for v0.1
 
+- runtime fluid simulation;
 - FFT ocean;
 - Navier–Stokes / real fluid simulation;
 - runtime mesh tessellation;
