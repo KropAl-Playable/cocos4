@@ -19,6 +19,8 @@ export const template = `
     <ui-prop type="dump" class="flutter-frequency"></ui-prop>
     <ui-prop type="dump" class="preview-in-editor"></ui-prop>
     <ui-prop type="dump" class="debug-draw"></ui-prop>
+    <ui-prop type="dump" class="debug-influences"></ui-prop>
+    <ui-prop type="dump" class="debug-control"></ui-prop>
 
     <ui-prop>
         <ui-label slot="label">Cage Data</ui-label>
@@ -47,6 +49,8 @@ export const $ = {
     flutterFrequency: '.flutter-frequency',
     previewInEditor: '.preview-in-editor',
     debugDraw: '.debug-draw',
+    debugInfluences: '.debug-influences',
+    debugControl: '.debug-control',
     status: '.cage-data-status',
     bake: '.bake-cage',
     refresh: '.refresh-status',
@@ -73,6 +77,8 @@ export function update(this: PanelThis, dump: any): void {
     renderDumpProperty(this.$.flutterFrequency, value.flutterFrequency);
     renderDumpProperty(this.$.previewInEditor, value.previewInEditor);
     renderDumpProperty(this.$.debugDraw, value.debugDraw);
+    renderDumpProperty(this.$.debugInfluences, value.debugInfluences);
+    renderDumpProperty(this.$.debugControl, value.debugControl);
     if (this.refreshStatus) void this.refreshStatus();
 }
 
