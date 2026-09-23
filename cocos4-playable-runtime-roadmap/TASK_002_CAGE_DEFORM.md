@@ -25,13 +25,13 @@ Implemented on `feat/cage-deform`:
 - ✅ isolated `builtin-standard-cage.effect`;
 - ✅ packed Vertex AO support in the cage material;
 - ✅ persistent editor Cage Baker prototype;
-- ✅ cage influences moved to glTF round-trippable `COLOR_1` / `COLOR_2`;
+- ✅ cage influences use glTF round-trippable `TEXCOORD_2..5` streams;
 - ✅ baked meshes are consumed directly without runtime influence generation.
 
 Still required before v0.1 is called complete:
 
 - ⏳ build and validate the Cage Baker inside Creator 3.8.8;
-- ⏳ verify `COLOR_0` AO + `COLOR_1/2` cage data survive GLB import together;
+- ⏳ verify `COLOR_0` AO + `TEXCOORD_2..5` cage data survive GLB import together;
 - ⏳ validate Debug Draw after the camera renderer fix;
 - ⏳ add/select an influence visualization or heatmap path;
 - ⏳ production/mobile benchmark and failure-case pass.
@@ -43,7 +43,7 @@ source Mesh
    ↓
 AO Baker        → COLOR_0
    ↓
-Cage Baker      → preserves COLOR_0, adds COLOR_1 + COLOR_2
+Cage Baker      → preserves COLOR_0, adds TEXCOORD_2..5
    ↓
 persistent GLB Mesh
    ↓
