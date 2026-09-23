@@ -84,31 +84,32 @@ export function ready(this: PanelThis): void {
                 meshName?: string;
             }>;
             if (!selection.length) {
-                this.$.status.value = 'No MeshRenderer selected';
+                this.$.status.textContent = 'No MeshRenderer selected';
                 return;
             }
             const modes = new Set(selection.map((item) => item.cageData || 'runtime'));
             const mode = modes.size > 1
                 ? 'Mixed'
                 : (modes.has('baked') ? 'Baked' : 'Runtime Generated');
-            this.$.status.value = mode;
+            this.$.status.textContent = mode;
         } catch (error) {
-            this.$.status.value = 'Unavailable';
+            this.$.status.textContent = 'Unavailable';
         }
     };
 
     this.$.bake.addEventListener('confirm', async () => {
         const count = Number(this.dump?.value?.controlCount?.value ?? 7);
         this.$.bake.disabled = true;
-        this.$.status.value = 'Baking…';
+        this.$.status.textContent = 'Baking…';
         try {
             const result = await Editor.Message.request(PACKAGE_NAME, 'bake-current', count) as {
                 assignedCount: number;
                 uniqueAssetCount: number;
             };
-            this.$.status.value = `Baked — ${result.assignedCount} renderer(s), ${result.uniqueAssetCount} mesh asset(s)`;
+            this.$.status.textContent = `Baked — ${result.assignedCount} renderer(s), ${result.uniqueAssetCount} mesh asset(s)`;
+            await this.refreshStatus();
         } catch (error) {
-            this.$.status.value = error instanceof Error ? error.message : String(error);
+            this.$.status.textContent = error instanceof Error ? error.message : String(error);
         } finally {
             this.$.bake.disabled = false;
         }
