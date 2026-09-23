@@ -73,7 +73,7 @@ export function update(this: PanelThis, dump: any): void {
     renderDumpProperty(this.$.flutterFrequency, value.flutterFrequency);
     renderDumpProperty(this.$.previewInEditor, value.previewInEditor);
     renderDumpProperty(this.$.debugDraw, value.debugDraw);
-    void this.refreshStatus();
+    if (this.refreshStatus) void this.refreshStatus();
 }
 
 export function ready(this: PanelThis): void {
