@@ -52,6 +52,46 @@ async function queryImportedMesh(url: string): Promise<AssetInfoLike> {
     throw new Error(`Imported GLB did not expose a cc.Mesh sub-asset: ${url}`);
 }
 
+async function bakeSelection(controlCount: number, outputDirectory: string) {
+    const uuids = selectedNodeUuids();
+    if (!uuids.length) throw new Error('Select at least one node with a MeshRenderer.');
+
+    const count = Math.max(2, Math.min(8, Math.floor(controlCount || 7)));
+    const directory = (outputDirectory || 'db://assets').replace(/\/$/, '');
+    const baked = await executeScene('exportBakedMeshes', [uuids, count]) as ExportedBake[];
+
+    const assignments: Array<{ nodeUuid: string; assetUuid: string; controlCount: number }> = [];
+    const assets: Array<{ url: string; uuid: string; nodeUuids: string[]; vertexCount: number; reusedSourceData: boolean }> = [];
+
+    for (const item of baked) {
+        const requestedUrl = `${directory}/${sanitizeAssetName(item.nodeName)}-cage-${item.controlCount}.glb`;
+        const url = await Editor.Message.request('asset-db', 'generate-available-url', requestedUrl);
+        const glb = Buffer.from(item.glbBase64, 'base64');
+        const info = await Editor.Message.request('asset-db', 'create-asset', url, glb);
+        if (!info) throw new Error(`Asset DB failed to create ${url}`);
+
+        const mesh = findMeshSubAsset(info as AssetInfoLike) || await queryImportedMesh(url);
+        for (const nodeUuid of item.nodeUuids) {
+            assignments.push({ nodeUuid, assetUuid: mesh.uuid, controlCount: item.controlCount });
+        }
+        assets.push({
+            url,
+            uuid: mesh.uuid,
+            nodeUuids: item.nodeUuids,
+            vertexCount: item.vertexCount,
+            reusedSourceData: item.reusedSourceData,
+        });
+    }
+
+    await executeScene('assignBakedAssets', [assignments]);
+    return {
+        assets,
+        assignedCount: assignments.length,
+        uniqueAssetCount: assets.length,
+        controlCount: count,
+    };
+}
+
 export const methods: Record<string, (...args: any[]) => any> = {
     open() {
         Editor.Panel.open(PACKAGE_NAME);
@@ -62,43 +102,11 @@ export const methods: Record<string, (...args: any[]) => any> = {
     },
 
     async bake(controlCount: number, outputDirectory: string) {
-        const uuids = selectedNodeUuids();
-        if (!uuids.length) throw new Error('Select at least one node with a MeshRenderer.');
+        return bakeSelection(controlCount, outputDirectory);
+    },
 
-        const count = Math.max(2, Math.min(8, Math.floor(controlCount || 7)));
-        const directory = (outputDirectory || 'db://assets').replace(/\/$/, '');
-        const baked = await executeScene('exportBakedMeshes', [uuids, count]) as ExportedBake[];
-
-        const assignments: Array<{ nodeUuid: string; assetUuid: string; controlCount: number }> = [];
-        const assets: Array<{ url: string; uuid: string; nodeUuids: string[]; vertexCount: number; reusedSourceData: boolean }> = [];
-
-        for (const item of baked) {
-            const requestedUrl = `${directory}/${sanitizeAssetName(item.nodeName)}-cage-${item.controlCount}.glb`;
-            const url = await Editor.Message.request('asset-db', 'generate-available-url', requestedUrl);
-            const glb = Buffer.from(item.glbBase64, 'base64');
-            const info = await Editor.Message.request('asset-db', 'create-asset', url, glb);
-            if (!info) throw new Error(`Asset DB failed to create ${url}`);
-
-            const mesh = findMeshSubAsset(info as AssetInfoLike) || await queryImportedMesh(url);
-            for (const nodeUuid of item.nodeUuids) {
-                assignments.push({ nodeUuid, assetUuid: mesh.uuid, controlCount: item.controlCount });
-            }
-            assets.push({
-                url,
-                uuid: mesh.uuid,
-                nodeUuids: item.nodeUuids,
-                vertexCount: item.vertexCount,
-                reusedSourceData: item.reusedSourceData,
-            });
-        }
-
-        await executeScene('assignBakedAssets', [assignments]);
-        return {
-            assets,
-            assignedCount: assignments.length,
-            uniqueAssetCount: assets.length,
-            controlCount: count,
-        };
+    async bakeCurrent(controlCount: number) {
+        return bakeSelection(controlCount, 'db://assets');
     },
 };
 
