@@ -33,13 +33,31 @@
     ],
     "messages": {
       "open": {
-        "methods": ["open"]
+        "methods": [
+          "open"
+        ]
       },
       "query-selection": {
-        "methods": ["querySelection"]
+        "methods": [
+          "querySelection"
+        ]
       },
       "bake": {
-        "methods": ["bake"]
+        "methods": [
+          "bake"
+        ]
+      },
+      "bake-current": {
+        "methods": [
+          "bakeCurrent"
+        ]
+      }
+    },
+    "inspector": {
+      "section": {
+        "node": {
+          "cc.CageDeformer": "./dist/contributions/inspector/cage-deformer.js"
+        }
       }
     }
   },
