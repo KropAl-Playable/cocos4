@@ -1,0 +1,34 @@
+<div class="root">
+    <h2>Playable Cage Baker</h2>
+    <div class="hint">
+        Bake the procedural cage influence streams into persistent GLB meshes.
+        Shared source meshes are baked once and remain shared.
+    </div>
+
+    <section>
+        <div class="section-title">Selection</div>
+        <pre id="selection">No selected MeshRenderer.</pre>
+        <button id="refresh">Refresh Selection</button>
+    </section>
+
+    <section class="grid">
+        <label>Control Count
+            <input id="controls" type="number" min="2" max="8" step="1" value="7">
+        </label>
+        <label>Output directory
+            <input id="output" value="db://assets">
+        </label>
+    </section>
+
+    <div class="hint">
+        Cage data is stored as glTF COLOR_1 (indices) + COLOR_2 (weights), while COLOR_0 remains available for baked Vertex AO.
+        Bake AO first, then Cage, when both are required.
+    </div>
+
+    <div class="actions">
+        <button id="bake" class="primary">Bake Selected</button>
+    </div>
+
+    <div id="status" class="status"></div>
+    <pre id="stats" class="stats"></pre>
+</div>
