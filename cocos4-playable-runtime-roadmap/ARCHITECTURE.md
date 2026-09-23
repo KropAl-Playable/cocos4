@@ -21,7 +21,7 @@ Cocos Creator Editor
         +-- Opt-in Effects
                +-- standard + Vertex AO
                +-- standard + Cage + Vertex AO
-               +-- advanced water
+               +-- Advanced Water-derived playable effect
                        |
                        v
                  Cocos Renderer
@@ -108,7 +108,8 @@ The low-frequency analytical waves are shared conceptually by both sides.
 
 GPU responsibilities:
 
-- surface displacement;
+- reuse the built-in Advanced Water presentation model where practical;
+- analytical surface displacement;
 - visual normals/detail;
 - Fresnel/specular;
 - foam/wakes;
