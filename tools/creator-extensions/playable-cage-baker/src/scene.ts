@@ -259,10 +259,12 @@ export function unload(): void {}
 
 export const methods = {
     describeSelection(uuids: string[]) {
+        const { hasCageInfluenceData } = baker();
         return selected(uuids).map((item) => ({
             uuid: item.node.uuid,
             name: item.node.name,
             meshName: item.mesh.name || '',
+            cageData: hasCageInfluenceData(item.mesh) ? 'baked' : 'runtime',
         }));
     },
 
