@@ -145,8 +145,15 @@ export class CageDeformer extends Component {
     }
 
     protected update(dt: number): void {
-        if (EDITOR && !this.previewInEditor) return;
         if (!this._renderer || !this._cageMesh || this._controlCount < 2) return;
+
+        // Debug influence visualization is useful even with animation preview disabled.
+        // Keep uniforms responsive in edit mode without advancing the simulation.
+        if (EDITOR && !this.previewInEditor) {
+            this._uploadControls();
+            if (this.debugDraw) this._drawDebug();
+            return;
+        }
 
         // Fixed-step control simulation keeps browser preview and editor preview
         // visually consistent even when their edit-mode tick rates differ.
