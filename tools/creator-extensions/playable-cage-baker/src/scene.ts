@@ -306,7 +306,7 @@ export const methods = {
             const CageDeformer = cc.CageDeformer;
             if (CageDeformer) {
                 const deformer = renderer.node.getComponent(CageDeformer);
-                if (deformer) deformer.controlCount = item.controlCount;
+                if (deformer) (deformer as any).controlCount = item.controlCount;
             }
         }
         return true;
