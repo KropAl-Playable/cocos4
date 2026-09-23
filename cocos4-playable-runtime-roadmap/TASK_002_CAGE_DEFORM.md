@@ -10,6 +10,46 @@ Implement lightweight GPU-driven deformation for trees, initially to simulate:
 
 The first prototype is deliberately **not** a full tetrahedral cage system.
 
+## Implementation status — v0.1 completion pass
+
+Implemented on `feat/cage-deform`:
+
+- ✅ hierarchical rotational CageDeformer runtime;
+- ✅ fixed root + beam-like trunk wind;
+- ✅ spring return + external impulse API;
+- ✅ fixed-step simulation for editor/browser consistency;
+- ✅ 4 influences per vertex;
+- ✅ normal/tangent rotation in the cage shader;
+- ✅ shared derived mesh cache;
+- ✅ camera-based Debug Draw path;
+- ✅ isolated `builtin-standard-cage.effect`;
+- ✅ packed Vertex AO support in the cage material;
+- ✅ persistent editor Cage Baker prototype;
+- ✅ cage influences moved to glTF round-trippable `COLOR_1` / `COLOR_2`;
+- ✅ baked meshes are consumed directly without runtime influence generation.
+
+Still required before v0.1 is called complete:
+
+- ⏳ build and validate the Cage Baker inside Creator 3.8.8;
+- ⏳ verify `COLOR_0` AO + `COLOR_1/2` cage data survive GLB import together;
+- ⏳ validate Debug Draw after the camera renderer fix;
+- ⏳ add/select an influence visualization or heatmap path;
+- ⏳ production/mobile benchmark and failure-case pass.
+
+Recommended asset order when AO + Cage are combined:
+
+~~~text
+source Mesh
+   ↓
+AO Baker        → COLOR_0
+   ↓
+Cage Baker      → preserves COLOR_0, adds COLOR_1 + COLOR_2
+   ↓
+persistent GLB Mesh
+   ↓
+builtin-standard-cage + USE_VERTEX_AO
+~~~
+
 ## Architecture
 
 ```text
