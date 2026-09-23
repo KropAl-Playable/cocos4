@@ -17,7 +17,7 @@
     "build:cli": "npm run build:cli-min && npm run build:declaration",
     "build:adapter": "node ./scripts/build-adapter.js",
     "build:const": "node ./scripts/build-const.js",
-    "build:dev": "npm run build:debug-infos && node ./scripts/build-h5-source",
+    "build:dev": "npm run build:debug-infos && node ./scripts/build-h5-source && npm run build:declaration",
     "build:debug-infos": "node ./scripts/build-debug-infos",
     "build:declaration": "npm run build:const && node ./scripts/build-declarations",
     "build:min": "npm run build:debug-infos && node ./scripts/build-h5-minified",
