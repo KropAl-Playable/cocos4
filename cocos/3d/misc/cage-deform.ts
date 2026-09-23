@@ -10,10 +10,8 @@ import { Mesh } from '../assets/mesh';
 
 export const MAX_CAGE_CONTROLS = 8;
 export const MAX_CAGE_INFLUENCES = 4;
-export const CAGE_INDEX_ATTRIBUTE_0 = AttributeName.ATTR_TEX_COORD2;
-export const CAGE_INDEX_ATTRIBUTE_1 = AttributeName.ATTR_TEX_COORD3;
-export const CAGE_WEIGHT_ATTRIBUTE_0 = AttributeName.ATTR_TEX_COORD4;
-export const CAGE_WEIGHT_ATTRIBUTE_1 = AttributeName.ATTR_TEX_COORD5;
+export const CAGE_INDEX_ATTRIBUTE = AttributeName.ATTR_JOINTS;
+export const CAGE_WEIGHT_ATTRIBUTE = AttributeName.ATTR_WEIGHTS;
 
 export interface ICageSpringSettings {
     stiffness: number;
@@ -29,16 +27,15 @@ export interface ICageLayout {
 
 export function hasCageInfluenceData (mesh: Mesh): boolean {
     mesh.initialize();
-    let mask = 0;
+    let hasIndices = false;
+    let hasWeights = false;
     for (const bundle of mesh.struct.vertexBundles) {
         for (const attribute of bundle.attributes) {
-            if (attribute.name === CAGE_INDEX_ATTRIBUTE_0) mask |= 1;
-            if (attribute.name === CAGE_INDEX_ATTRIBUTE_1) mask |= 2;
-            if (attribute.name === CAGE_WEIGHT_ATTRIBUTE_0) mask |= 4;
-            if (attribute.name === CAGE_WEIGHT_ATTRIBUTE_1) mask |= 8;
+            if (attribute.name === CAGE_INDEX_ATTRIBUTE) hasIndices = true;
+            if (attribute.name === CAGE_WEIGHT_ATTRIBUTE) hasWeights = true;
         }
     }
-    return mask === 15;
+    return hasIndices && hasWeights;
 }
 
 function clampControlCount (controlCount: number): number {
@@ -207,7 +204,7 @@ export function encodeCageInfluences (
 
     let encodedWeightTotal = 0;
     for (let slot = 0; slot < MAX_CAGE_INFLUENCES; ++slot) {
-        outIndices[offset + slot] = Math.round(indices[slot] / (MAX_CAGE_CONTROLS - 1) * 255);
+        outIndices[offset + slot] = indices[slot];
         const encodedWeight = Math.round(Math.max(0, weights[slot]) * 255);
         outWeights[offset + slot] = encodedWeight;
         encodedWeightTotal += encodedWeight;
@@ -296,12 +293,9 @@ export function createCageInfluenceMesh (source: Mesh, controlCount: number): Me
         const bundleIndex = primitive.vertexBundelIndices[0];
         const bundle = originalStruct.vertexBundles[bundleIndex];
         if (bundle.attributes.some((attribute) =>
-            attribute.name === CAGE_INDEX_ATTRIBUTE_0
-            || attribute.name === CAGE_INDEX_ATTRIBUTE_1
-            || attribute.name === CAGE_WEIGHT_ATTRIBUTE_0
-            || attribute.name === CAGE_WEIGHT_ATTRIBUTE_1
+            attribute.name === CAGE_INDEX_ATTRIBUTE || attribute.name === CAGE_WEIGHT_ATTRIBUTE
         )) {
-            throw new Error('Cage Deform source mesh already uses TEXCOORD_2..5 reserved for cage influences.');
+            throw new Error('Cage Deform source mesh already contains JOINTS_0 / WEIGHTS_0. Cage v0.1 supports static meshes only.');
         }
 
         const positions = source.readAttribute(primitiveIndex, AttributeName.ATTR_POSITION);
@@ -381,10 +375,8 @@ export function createCageInfluenceMesh (source: Mesh, controlCount: number): Me
                 chunk.set(indices.subarray(vertexIndex * 4, vertexIndex * 4 + 4), dstOffset + sourceStride);
                 chunk.set(weights.subarray(vertexIndex * 4, vertexIndex * 4 + 4), dstOffset + sourceStride + 4);
             }
-            attributes.push(new Attribute(CAGE_INDEX_ATTRIBUTE_0, Format.RG8, true));
-            attributes.push(new Attribute(CAGE_INDEX_ATTRIBUTE_1, Format.RG8, true));
-            attributes.push(new Attribute(CAGE_WEIGHT_ATTRIBUTE_0, Format.RG8, true));
-            attributes.push(new Attribute(CAGE_WEIGHT_ATTRIBUTE_1, Format.RG8, true));
+            attributes.push(new Attribute(CAGE_INDEX_ATTRIBUTE, Format.RGBA8UI, false));
+            attributes.push(new Attribute(CAGE_WEIGHT_ATTRIBUTE, Format.RGBA8, true));
         } else {
             chunk = new Uint8Array(sourceBytes);
         }
