@@ -124,7 +124,11 @@ No GPU readback.
 
 ## Visual target
 
-A stylized but rich mobile-friendly water shader with:
+Use COCOS 4's existing `editor/assets/effects/advanced/water.effect` as the visual baseline rather than designing the presentation shader from zero. Extend/fork it only for the features the playable runtime needs.
+
+The existing effect already covers Fresnel/PBR water presentation, layered animated normals and optional water scattering. Task 003 primarily adds analytical surface displacement + CPU agreement + buoyancy.
+
+Target additions/preserved features include:
 
 - layered directional waves;
 - large low-frequency displacement;
@@ -168,6 +172,8 @@ Gameplay uses stable low-frequency layers. Higher-frequency detail may remain vi
 - WebGL path works;
 - build-size delta is acceptable;
 - quality degrades gracefully.
+
+COCOS also includes Houdini/Zeno fluid VAT playback. Those are offline-baked fluid animations, not runtime solvers, and are documented as a separate optional VFX path in TASK_003.
 
 Detailed plan: TASK_003_ADVANCED_WATER_BUOYANCY.md.
 
