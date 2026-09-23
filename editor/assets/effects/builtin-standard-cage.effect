@@ -52,6 +52,7 @@ CCEffect %{
         cageRotation6:                    { value: [0.0, 0.0, 0.0, 1.0], editor: { visible: false } }
         cageRotation7:                    { value: [0.0, 0.0, 0.0, 1.0], editor: { visible: false } }
         cageParams:                       { value: [7.0, 0.015, 0.0, 5.0], editor: { visible: false } }
+        cageDebugParams:                  { value: [0.0, 0.0, 0.0, 0.0], editor: { visible: false } }
         mainTexture:                      { value: grey, target: albedoMap, editor: { displayName: AlbedoMap } }
         normalMap:                        { value: normal }
         pbrMap:                           { value: grey }
@@ -185,6 +186,7 @@ CCProgram shared-ubos %{
     vec4 cageRotation6;
     vec4 cageRotation7;
     vec4 cageParams;
+    vec4 cageDebugParams;
   };
 }%
 
@@ -222,6 +224,12 @@ CCProgram surface-vertex %{
   #pragma format(RGBA8UI)
   in vec4 a_joints;
   in vec4 a_weights;
+
+  #if __VERSION__ < 300
+    varying float v_cageDebugWeight;
+  #else
+    out float v_cageDebugWeight;
+  #endif
 
   vec3 CageRest(int index)
   {
@@ -284,6 +292,24 @@ CCProgram surface-vertex %{
   vec3 RotateByControl(vec3 vector, int index)
   {
     return RotateByQuat(vector, CageRotation(index));
+  }
+
+  float CageWeightForControl(int selectedControl)
+  {
+    vec4 weights = NormalizedCageWeights();
+    float value = 0.0;
+    if (DecodeCageIndex(a_joints.x) == selectedControl) value += weights.x;
+    if (DecodeCageIndex(a_joints.y) == selectedControl) value += weights.y;
+    if (DecodeCageIndex(a_joints.z) == selectedControl) value += weights.z;
+    if (DecodeCageIndex(a_joints.w) == selectedControl) value += weights.w;
+    return clamp(value, 0.0, 1.0);
+  }
+
+  #define CC_SURFACES_VERTEX_MODIFY_LOCAL_SHARED_DATA
+  void SurfacesVertexModifyLocalSharedData(inout SurfacesStandardVertexIntermediate In)
+  {
+    int selectedControl = int(floor(cageDebugParams.y + 0.5));
+    v_cageDebugWeight = CageWeightForControl(selectedControl);
   }
 
   #define CC_SURFACES_VERTEX_MODIFY_LOCAL_POS
@@ -389,6 +415,14 @@ CCProgram surface-vertex %{
 }%
 
 CCProgram surface-fragment %{
+  #if USE_CAGE_DEFORM && !CC_USE_SKINNING
+    #if __VERSION__ < 300
+      varying float v_cageDebugWeight;
+    #else
+      in float v_cageDebugWeight;
+    #endif
+  #endif
+
   #if USE_ALBEDO_MAP
     uniform sampler2D albedoMap;
     #pragma define-meta ALBEDO_UV options([v_uv, v_uv1])
@@ -423,6 +457,19 @@ CCProgram surface-fragment %{
   #endif
 
 
+  vec3 CageDebugHeatmap(float weight)
+  {
+    float w = clamp(weight, 0.0, 1.0);
+    // Dark blue -> cyan -> yellow -> red. Tuned for readable influence falloff.
+    vec3 cold = vec3(0.02, 0.05, 0.35);
+    vec3 mid = vec3(0.0, 0.85, 0.9);
+    vec3 warm = vec3(1.0, 0.9, 0.05);
+    vec3 hot = vec3(1.0, 0.05, 0.0);
+    vec3 lowMix = mix(cold, mid, smoothstep(0.0, 0.35, w));
+    vec3 highMix = mix(warm, hot, smoothstep(0.70, 1.0, w));
+    return mix(lowMix, highMix, smoothstep(0.35, 0.70, w));
+  }
+
   float GetVertexAO()
   {
     #if USE_VERTEX_AO
@@ -442,6 +489,12 @@ CCProgram surface-fragment %{
   vec4 SurfacesFragmentModifyBaseColorAndTransparency()
   {
     vec4 baseColor = albedo;
+
+    #if USE_CAGE_DEFORM && !CC_USE_SKINNING
+      if (cageDebugParams.x > 0.5) {
+        return vec4(CageDebugHeatmap(v_cageDebugWeight), 1.0);
+      }
+    #endif
 
     #if USE_VERTEX_COLOR
       baseColor.rgb *= SRGBToLinear(FSInput_vertexColor.rgb); // use linear
