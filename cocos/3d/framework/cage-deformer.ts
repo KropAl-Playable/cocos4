@@ -5,7 +5,7 @@ import { EDITOR } from 'internal:constants';
  https://www.cocos.com/
 */
 
-import { Color, Mat4, Quat, Vec3, Vec4, _decorator, CCBoolean, CCFloat, CCInteger, cclegacy } from '../../core';
+import { Color, Mat4, Quat, Vec3, Vec4, _decorator, CCFloat, CCInteger, cclegacy } from '../../core';
 import { Component } from '../../scene-graph';
 import { Mesh } from '../assets/mesh';
 import { MeshRenderer } from './mesh-renderer';
@@ -87,10 +87,10 @@ export class CageDeformer extends Component {
     @range([0, 20, 0.01])
     public flutterFrequency = 5;
 
-    @property({ type: CCBoolean })
+    @property
     public previewInEditor = false;
 
-    @property({ type: CCBoolean })
+    @property
     public debugDraw = false;
 
     private _renderer: MeshRenderer | null = null;
