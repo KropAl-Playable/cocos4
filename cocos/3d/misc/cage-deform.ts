@@ -10,8 +10,8 @@ import { Mesh } from '../assets/mesh';
 
 export const MAX_CAGE_CONTROLS = 8;
 export const MAX_CAGE_INFLUENCES = 4;
-export const CAGE_INDEX_ATTRIBUTE = 'a_cageIndices';
-export const CAGE_WEIGHT_ATTRIBUTE = 'a_cageWeights';
+export const CAGE_INDEX_ATTRIBUTE = AttributeName.ATTR_COLOR1;
+export const CAGE_WEIGHT_ATTRIBUTE = AttributeName.ATTR_COLOR2;
 
 export interface ICageSpringSettings {
     stiffness: number;
