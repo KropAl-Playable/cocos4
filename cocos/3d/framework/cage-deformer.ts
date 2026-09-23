@@ -98,6 +98,7 @@ export class CageDeformer extends Component {
     private _cageMesh: Mesh | null = null;
     private _controlCount = 0;
     private _trunkCount = 0;
+    private _lastDataMode: 'baked' | 'runtime' | null = null;
     private _time = 0;
     private _simulationAccumulator = 0;
 
@@ -242,8 +243,18 @@ export class CageDeformer extends Component {
         if (!this._renderer || !this._sourceMesh) return;
         const count = Math.max(2, Math.min(MAX_CAGE_CONTROLS, Math.floor(this.controlCount)));
         this._controlCount = count;
+        const usesBakedData = hasCageInfluenceData(this._sourceMesh);
         this._cageMesh = getCageMesh(this._sourceMesh, count);
         this._renderer.mesh = this._cageMesh;
+
+        const dataMode: 'baked' | 'runtime' = usesBakedData ? 'baked' : 'runtime';
+        if (this._lastDataMode !== dataMode) {
+            this._lastDataMode = dataMode;
+            // One-time diagnostic per rebuild mode; intentionally not emitted every frame.
+            console.info(
+                `[CageDeformer] ${this.node.name}: Cage Data = ${usesBakedData ? 'Baked' : 'Runtime Generated'}`,
+            );
+        }
 
         const layout = buildDefaultCageLayout(this._sourceMesh, count);
         this._parents = layout.parents.slice();
