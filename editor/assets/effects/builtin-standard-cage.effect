@@ -12,6 +12,11 @@ CCEffect %{
         albedoScale:                      { value: [1.0, 1.0, 1.0], target: albedoScaleAndCutoff.xyz }
         alphaThreshold:                   { value: 0.5, target: albedoScaleAndCutoff.w, editor: { parent: USE_ALPHA_TEST, slide: true, range: [0, 1.0], step: 0.001 } }
         occlusion:                        { value: 0.0, target: pbrParams.x, editor: { slide: true, range: [0, 1.0], step: 0.001 } }
+        vertexAOStrength:                 { value: 1.0, target: vertexAOParams.x, editor: { parent: USE_VERTEX_AO, slide: true, range: [0.0, 4.0], step: 0.01 } }
+        vertexAOContrast:                 { value: 1.0, target: vertexAOParams.y, editor: { parent: USE_VERTEX_AO, slide: true, range: [0.1, 4.0], step: 0.01 } }
+        vertexAOMin:                      { value: 0.0, target: vertexAOParams.z, editor: { parent: USE_VERTEX_AO, slide: true, range: [0.0, 1.0], step: 0.01 } }
+        vertexAOPBRStrength:              { value: 1.0, target: vertexAOParams.w, editor: { parent: USE_VERTEX_AO, slide: true, range: [0.0, 1.0], step: 0.01 } }
+        vertexAOColorStrength:            { value: 0.25, target: vertexAOExtra.x, editor: { parent: USE_VERTEX_AO, slide: true, range: [0.0, 1.0], step: 0.01 } }
         roughness:                        { value: 0.5, target: pbrParams.y, editor: { slide: true, range: [0, 1.0], step: 0.001 } }
         metallic:                         { value: 0.0, target: pbrParams.z, editor: { slide: true, range: [0, 1.0], step: 0.001 } }
         specularIntensity:                { value: 0.5, target: pbrParams.w, editor: { slide: true, range: [0.0, 1.0], step: 0.001 } }
@@ -153,6 +158,8 @@ CCProgram shared-ubos %{
     vec4 emissive;
     vec4 emissiveScaleParam;
     vec4 anisotropyParam;
+    vec4 vertexAOParams;
+    vec4 vertexAOExtra;
     vec4 cageRest0;
     vec4 cageRest1;
     vec4 cageRest2;
@@ -187,13 +194,19 @@ CCProgram macro-remapping %{
   #pragma define-meta USE_TWOSIDE
   #pragma define-meta IS_ANISOTROPY
   #pragma define-meta USE_VERTEX_COLOR
+  #pragma define-meta USE_VERTEX_AO
+  #pragma define-meta VERTEX_AO_CHANNEL options([r, g, b, a])
   #pragma define-meta USE_CAGE_DEFORM
   #pragma define-meta FIX_ANISOTROPIC_ROTATION_MAP
 
   #define CC_SURFACES_USE_SECOND_UV HAS_SECOND_UV
   #define CC_SURFACES_USE_TWO_SIDED USE_TWOSIDE
   #define CC_SURFACES_LIGHTING_ANISOTROPIC IS_ANISOTROPY
-  #define CC_SURFACES_USE_VERTEX_COLOR USE_VERTEX_COLOR
+#if USE_VERTEX_COLOR || USE_VERTEX_AO
+  #define CC_SURFACES_USE_VERTEX_COLOR 1
+#else
+  #define CC_SURFACES_USE_VERTEX_COLOR 0
+#endif
 
   // depend on UI macros
 #if IS_ANISOTROPY || USE_NORMAL_MAP
@@ -407,6 +420,21 @@ CCProgram surface-fragment %{
   #if USE_ALPHA_TEST
     #pragma define-meta ALPHA_TEST_CHANNEL options([a, r])
   #endif
+
+
+  float GetVertexAO()
+  {
+    #if USE_VERTEX_AO
+      // Vertex AO is linear packed data; never apply sRGB conversion.
+      float ao = clamp(FSInput_vertexColor.VERTEX_AO_CHANNEL, 0.0, 1.0);
+      ao = pow(ao, max(vertexAOParams.y, 0.0001));
+      ao = 1.0 - (1.0 - ao) * vertexAOParams.x;
+      ao = clamp(ao, 0.0, 1.0);
+      return max(ao, vertexAOParams.z);
+    #else
+      return 1.0;
+    #endif
+  }
 
 
   #define CC_SURFACES_FRAGMENT_MODIFY_BASECOLOR_AND_TRANSPARENCY
