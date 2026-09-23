@@ -219,8 +219,8 @@ CCProgram macro-remapping %{
 
 CCProgram surface-vertex %{
 #if USE_CAGE_DEFORM
-  in vec4 a_cageIndices;
-  in vec4 a_cageWeights;
+  in vec4 a_color1;
+  in vec4 a_color2;
 
   vec3 CageRest(int index)
   {
@@ -270,8 +270,8 @@ CCProgram surface-vertex %{
 
   vec4 NormalizedCageWeights()
   {
-    float sum = max(dot(a_cageWeights, vec4(1.0)), 0.0001);
-    return a_cageWeights / sum;
+    float sum = max(dot(a_color2, vec4(1.0)), 0.0001);
+    return a_color2 / sum;
   }
 
   vec3 DeformByControl(vec3 position, int index)
@@ -289,10 +289,10 @@ CCProgram surface-vertex %{
   vec3 SurfacesVertexModifyLocalPos(in SurfacesStandardVertexIntermediate In)
   {
     vec4 weights = NormalizedCageWeights();
-    int i0 = DecodeCageIndex(a_cageIndices.r);
-    int i1 = DecodeCageIndex(a_cageIndices.g);
-    int i2 = DecodeCageIndex(a_cageIndices.b);
-    int i3 = DecodeCageIndex(a_cageIndices.a);
+    int i0 = DecodeCageIndex(a_color1.r);
+    int i1 = DecodeCageIndex(a_color1.g);
+    int i2 = DecodeCageIndex(a_color1.b);
+    int i3 = DecodeCageIndex(a_color1.a);
 
     vec3 position =
         DeformByControl(In.position.xyz, i0) * weights.r +
@@ -300,7 +300,7 @@ CCProgram surface-vertex %{
         DeformByControl(In.position.xyz, i2) * weights.b +
         DeformByControl(In.position.xyz, i3) * weights.a;
 
-    float weightedIndex = dot(a_cageIndices, weights) * 7.0;
+    float weightedIndex = dot(a_color1, weights) * 7.0;
     float height = clamp(weightedIndex / max(cageParams.x - 1.0, 1.0), 0.0, 1.0);
     float phase = In.position.x * 1.7 + In.position.z * 1.3 + cageParams.z * cageParams.w;
     float flutter = sin(phase) * cageParams.y * height * height;
@@ -313,10 +313,10 @@ CCProgram surface-vertex %{
   vec3 SurfacesVertexModifyLocalNormal(in SurfacesStandardVertexIntermediate In)
   {
     vec4 weights = NormalizedCageWeights();
-    int i0 = DecodeCageIndex(a_cageIndices.r);
-    int i1 = DecodeCageIndex(a_cageIndices.g);
-    int i2 = DecodeCageIndex(a_cageIndices.b);
-    int i3 = DecodeCageIndex(a_cageIndices.a);
+    int i0 = DecodeCageIndex(a_color1.r);
+    int i1 = DecodeCageIndex(a_color1.g);
+    int i2 = DecodeCageIndex(a_color1.b);
+    int i3 = DecodeCageIndex(a_color1.a);
     vec3 normal =
         RotateByControl(In.normal.xyz, i0) * weights.r +
         RotateByControl(In.normal.xyz, i1) * weights.g +
@@ -330,10 +330,10 @@ CCProgram surface-vertex %{
     vec4 SurfacesVertexModifyLocalTangent(in SurfacesStandardVertexIntermediate In)
     {
       vec4 weights = NormalizedCageWeights();
-      int i0 = DecodeCageIndex(a_cageIndices.r);
-      int i1 = DecodeCageIndex(a_cageIndices.g);
-      int i2 = DecodeCageIndex(a_cageIndices.b);
-      int i3 = DecodeCageIndex(a_cageIndices.a);
+      int i0 = DecodeCageIndex(a_color1.r);
+      int i1 = DecodeCageIndex(a_color1.g);
+      int i2 = DecodeCageIndex(a_color1.b);
+      int i3 = DecodeCageIndex(a_color1.a);
       vec3 tangent =
           RotateByControl(In.tangent.xyz, i0) * weights.r +
           RotateByControl(In.tangent.xyz, i1) * weights.g +
