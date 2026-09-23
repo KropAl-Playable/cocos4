@@ -21,15 +21,13 @@ Playable Tools → Cage Baker
 The baked GLB uses standard glTF color streams so Creator can round-trip the data:
 
 ~~~text
-COLOR_0   = optional Vertex AO / existing packed color data
-TEXCOORD_2 = cage indices 0..1 (RG8 normalized)
-TEXCOORD_3 = cage indices 2..3 (RG8 normalized)
-TEXCOORD_4 = cage weights 0..1 (RG8 normalized)
-TEXCOORD_5 = cage weights 2..3 (RG8 normalized)
+COLOR_0  = optional Vertex AO / existing packed color data
+JOINTS_0  = cage control indices (RGBA8UI)
+WEIGHTS_0 = cage weights (RGBA8 normalized)
 ~~~
 
-The cage shader reconstructs four indices and four weights from TEXCOORD_2..5. This remains 8 bytes/vertex total and avoids Creator 3.8's GLB importer rejecting COLOR_1/COLOR_2.
+The cage shader reuses the standard static JOINTS_0 / WEIGHTS_0 semantics as a compact four-influence transport. This remains 8 bytes/vertex total and avoids Creator 3.8 rejecting COLOR_1/COLOR_2 while using only two vertex-attribute slots.
 
-When AO + Cage are used together, bake AO first and Cage second so the Cage exporter preserves COLOR_0. TEXCOORD_2..5 are reserved by Cage v0.1 and must be unused by the source mesh.
+When AO + Cage are used together, bake AO first and Cage second so the Cage exporter preserves COLOR_0. JOINTS_0 / WEIGHTS_0 are reserved by Cage v0.1, so the source mesh must be static and must not already contain skinning data.
 
 Meshes that share the same source Mesh are baked once and assigned to all selected instances.
