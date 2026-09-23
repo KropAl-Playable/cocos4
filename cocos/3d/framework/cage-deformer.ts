@@ -93,6 +93,13 @@ export class CageDeformer extends Component {
     @property
     public debugDraw = false;
 
+    @property
+    public debugInfluences = false;
+
+    @property({ type: CCInteger })
+    @range([0, MAX_CAGE_CONTROLS - 1, 1])
+    public debugControl = 0;
+
     private _renderer: MeshRenderer | null = null;
     private _sourceMesh: Mesh | null = null;
     private _cageMesh: Mesh | null = null;
@@ -114,6 +121,7 @@ export class CageDeformer extends Component {
     private _uniformOffsets: Vec4[] = [];
     private _uniformRotations: Vec4[] = [];
     private _params = new Vec4();
+    private _debugParams = new Vec4();
     private _springSettings = {
         stiffness: 22,
         damping: 0.86,
@@ -357,6 +365,17 @@ export class CageDeformer extends Component {
                 if (paramsHandle) {
                     this._params.set(this._controlCount, this.flutterStrength, this._time, this.flutterFrequency);
                     pass.setUniform(paramsHandle, this._params);
+                }
+
+                const debugHandle = pass.getHandle('cageDebugParams');
+                if (debugHandle) {
+                    this._debugParams.set(
+                        this.debugInfluences ? 1 : 0,
+                        Math.max(0, Math.min(this._controlCount - 1, Math.floor(this.debugControl))),
+                        0,
+                        0,
+                    );
+                    pass.setUniform(debugHandle, this._debugParams);
                 }
             }
         }
