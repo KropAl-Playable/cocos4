@@ -162,7 +162,7 @@ export class WaterSurface extends Component {
 
         const count = Math.max(1, Math.min(MAX_WATER_WAVES, Math.floor(this.waveCount)));
         const waves = this.waves;
-        sampleGerstnerWaves(_localPoint.x, _localPoint.z, this._time, waves.slice(0, count), _localSample);
+        sampleGerstnerWaves(_localPoint.x, _localPoint.z, this._time, waves, _localSample, count);
 
         Vec3.transformMat4(_worldPosition, _localSample.position, this.node.worldMatrix);
         Vec3.transformMat4Normal(_worldNormal, _localSample.normal, this.node.worldMatrix);
