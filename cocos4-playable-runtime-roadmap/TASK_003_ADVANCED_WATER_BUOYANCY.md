@@ -29,6 +29,10 @@ Next gates:
 - ✅ world-space sampling compensates Gerstner horizontal displacement with a bounded inverse solve;
 - ✅ bounded five-source wake API wired to the stylized water shader;
 - ✅ WaterSurface now rebinds component-owned wave state after Editor material recreation/reimport;
+- ✅ nested WaterWave authoring data uses a browser-safe constructor-free serializable shape;
+- ✅ one WaterSurface can drive all child MeshRenderers for tiled water fields;
+- ✅ analytical waves are evaluated in world space, so adjacent translated tiles share one seamless phase field;
+- ⏳ browser validation of persisted custom wave values after the serialization fix;
 - ⏳ quality tiers and final performance pass.
 
 The key requirement is:
