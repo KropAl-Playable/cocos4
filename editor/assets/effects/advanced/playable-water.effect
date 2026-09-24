@@ -1,0 +1,424 @@
+// Playable water: stylized visual stack + shared analytical Gerstner displacement.
+// CPU gameplay sampling is owned by cc.WaterSurface and uses the same four-wave contract.
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: playable-water-vs:vert
+      frag: unlit-fs:frag
+      properties: &props
+        mainTexture:          { value: white }
+        mainColor:            { value: [1, 1, 1, 1], editor: { type: color } }
+        reflectTexture:       { value: white }
+        fReflect:             { value: 0.5, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        fresnelPow:           { value: 1.0 }
+        noiseTexture:         { value: white }
+        rimColor:             { value: [1, 1, 1, 1], editor: { type: color } }
+        normalTextureA:       { value: normal }
+        normalTextureB:       { value: normal }
+        foamTexture:          { value: white }
+        wakeMaskTexture:      { value: white }
+        shallowColor:         { value: [0.12, 0.65, 0.78, 1], editor: { type: color } }
+        deepColor:            { value: [0.02, 0.22, 0.4, 1], editor: { type: color } }
+        foamColor:            { value: [1, 1, 1, 1], editor: { type: color } }
+        waterAlpha:           { value: 0.78, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        normalStrength:       { value: 0.5, editor: { slide: true, range: [0, 2], step: 0.01 } }
+        normalScaleA:         { value: 2.0 }
+        normalScaleB:         { value: 3.25 }
+        normalSpeedA:         { value: 0.035 }
+        normalSpeedB:         { value: 0.025 }
+        foamScale:            { value: 2.0 }
+        foamSpeed:            { value: 0.04 }
+        foamIntensity:        { value: 0.25, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        foamThresholdLow:     { value: 0.58 }
+        foamThresholdHigh:    { value: 0.78 }
+        crestFoamIntensity:   { value: 0.65, editor: { slide: true, range: [0, 2], step: 0.01 } }
+        crestFoamThreshold:   { value: 0.42, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        crestFoamNoiseAmount: { value: 0.55, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        wakeIntensity:        { value: 0.0, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        wakeScale:            { value: 1.0 }
+        waveVisualAmount:     { value: 1.0, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        fresnelIntensity:     { value: 0.7, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        reflectionDistortion: { value: 0.04, editor: { slide: true, range: [0, 0.2], step: 0.001 } }
+        depthTintStrength:    { value: 0.35, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        shadowReceiverStrength: { value: 0.3, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        edgeFoamIntensity:    { value: 0.48, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        edgeFoamWidth:        { value: 0.075, editor: { slide: true, range: [0.001, 0.5], step: 0.001 } }
+        edgeFoamNoiseAmount:  { value: 0.35, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        dynamicWakeFoamIntensity:   { value: 0.16, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        dynamicWakeNormalStrength:  { value: 0.7, editor: { slide: true, range: [0, 2], step: 0.01 } }
+        dynamicWakeLength:          { value: 3.4 }
+        dynamicWakeWidth:           { value: 0.8 }
+        dynamicWakeRippleScale:     { value: 7.0 }
+        dynamicWakeCrestFoamThreshold: { value: 0.78, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        dynamicWakeData0:           { value: [0, 0, -1, 0], editor: { visible: false } }
+        dynamicWakeData1:           { value: [0, 0, -1, 0], editor: { visible: false } }
+        dynamicWakeData2:           { value: [0, 0, -1, 0], editor: { visible: false } }
+        dynamicWakeData3:           { value: [0, 0, -1, 0], editor: { visible: false } }
+        dynamicWakeData4:           { value: [0, 0, -1, 0], editor: { visible: false } }
+        dynamicWakeIntensities:     { value: [0, 0, 0, 0], editor: { visible: false } }
+        dynamicWakeIntensity4:      { value: 0.0, editor: { visible: false } }
+
+        # Shared gameplay/render wave contract. Hidden: authored by WaterSurface.
+        waterWaveDirAmp0:           { value: [1.0, 0.0, 0.18, 0.35], editor: { visible: false } }
+        waterWaveDirAmp1:           { value: [-0.41, 0.91, 0.10, 0.28], editor: { visible: false } }
+        waterWaveDirAmp2:           { value: [0.79, 0.62, 0.055, 0.20], editor: { visible: false } }
+        waterWaveDirAmp3:           { value: [-0.94, -0.35, 0.035, 0.16], editor: { visible: false } }
+        waterWaveParams0:           { value: [4.5, 1.0, 0.0, 1.0], editor: { visible: false } }
+        waterWaveParams1:           { value: [2.8, 0.72, 1.7, 1.0], editor: { visible: false } }
+        waterWaveParams2:           { value: [1.6, 0.48, 3.4, 1.0], editor: { visible: false } }
+        waterWaveParams3:           { value: [0.95, 0.34, 5.1, 0.0], editor: { visible: false } }
+        waterWaveShape:             { value: [0.25, 0.25, 0.25, 0.25], editor: { visible: false } }
+        waterWaveTime:              { value: [0.0, 3.0, 0.0, 0.0], editor: { visible: false } }
+
+        waterPadding0:              { value: 0.0, editor: { visible: false } }
+        waterPadding1:              { value: 0.0, editor: { visible: false } }
+        waterPadding2:              { value: 0.0, editor: { visible: false } }
+
+  - name: transparent
+    passes:
+    - vert: playable-water-vs:vert
+      frag: unlit-fs:frag
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+}%
+
+CCProgram water-constants %{
+  uniform Constant {
+    vec4 mainColor;
+    vec4 rimColor;
+    vec4 shallowColor;
+    vec4 deepColor;
+    vec4 foamColor;
+    vec4 dynamicWakeData0;
+    vec4 dynamicWakeData1;
+    vec4 dynamicWakeData2;
+    vec4 dynamicWakeData3;
+    vec4 dynamicWakeData4;
+    vec4 dynamicWakeIntensities;
+
+    vec4 waterWaveDirAmp0;
+    vec4 waterWaveDirAmp1;
+    vec4 waterWaveDirAmp2;
+    vec4 waterWaveDirAmp3;
+    vec4 waterWaveParams0;
+    vec4 waterWaveParams1;
+    vec4 waterWaveParams2;
+    vec4 waterWaveParams3;
+    vec4 waterWaveShape;
+    vec4 waterWaveTime;
+
+    float fReflect;
+    float fresnelPow;
+    float waterAlpha;
+    float normalStrength;
+    float normalScaleA;
+    float normalScaleB;
+    float normalSpeedA;
+    float normalSpeedB;
+    float foamScale;
+    float foamSpeed;
+    float foamIntensity;
+    float foamThresholdLow;
+    float foamThresholdHigh;
+    float crestFoamIntensity;
+    float crestFoamThreshold;
+    float crestFoamNoiseAmount;
+    float wakeIntensity;
+    float wakeScale;
+    float waveVisualAmount;
+    float fresnelIntensity;
+    float reflectionDistortion;
+    float depthTintStrength;
+    float shadowReceiverStrength;
+    float edgeFoamIntensity;
+    float edgeFoamWidth;
+    float edgeFoamNoiseAmount;
+    float dynamicWakeFoamIntensity;
+    float dynamicWakeNormalStrength;
+    float dynamicWakeLength;
+    float dynamicWakeWidth;
+    float dynamicWakeRippleScale;
+    float dynamicWakeIntensity4;
+    float dynamicWakeCrestFoamThreshold;
+    float waterPadding0;
+    float waterPadding1;
+    float waterPadding2;
+  };
+}%
+
+CCProgram playable-water-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/local-batch>
+  #include <legacy/fog-vs>
+  #include <legacy/shadow-map-vs>
+  #include <water-constants>
+
+  in vec4 a_color;
+  #if HAS_SECOND_UV
+    in vec2 a_texCoord1;
+  #endif
+
+  out vec3 v_position;
+  out vec3 v_normal;
+  out vec3 v_tangent;
+  out vec3 v_bitangent;
+  out vec2 v_uv;
+  out vec2 v_uv1;
+  out vec4 v_color;
+  out float v_waveCrest;
+
+  const float WATER_TWO_PI = 6.28318530718;
+
+  void accumulateWaterWave(
+    vec2 xz,
+    vec4 dirAmp,
+    vec4 params,
+    float crestSharpness,
+    inout vec3 displaced,
+    inout vec3 dPdx,
+    inout vec3 dPdz,
+    inout float crestSignal
+  ) {
+    if (params.w < 0.5 || abs(dirAmp.z) < 0.000001) return;
+
+    vec2 direction = dirAmp.xy;
+    float dirLength = max(length(direction), 0.000001);
+    direction /= dirLength;
+
+    float amplitude = dirAmp.z;
+    float steepness = clamp(dirAmp.w, 0.0, 1.0);
+    float wavelength = max(abs(params.x), 0.000001);
+    float speed = params.y;
+    float phase = params.z;
+    float k = WATER_TWO_PI / wavelength;
+    float theta = k * (dot(direction, xz) - speed * waterWaveTime.x) + phase;
+    float s = sin(theta);
+    float c = cos(theta);
+    float qa = steepness * amplitude;
+    float ak = amplitude * k;
+    float qakSin = steepness * ak * s;
+
+    float sharpness = clamp(crestSharpness, 0.0, 1.0);
+    float shapeRatio = min(0.35, 0.5 * k * abs(amplitude) * sharpness);
+    float shapeAmplitude = amplitude * shapeRatio;
+    float sin2Theta = sin(theta * 2.0);
+    float cos2Theta = cos(theta * 2.0);
+    float verticalSlope = ak * c + 2.0 * shapeAmplitude * k * sin2Theta;
+
+    displaced.x += qa * direction.x * c;
+    displaced.y += amplitude * s - shapeAmplitude * cos2Theta;
+    displaced.z += qa * direction.y * c;
+
+    dPdx.x -= qakSin * direction.x * direction.x;
+    dPdx.y += verticalSlope * direction.x;
+    dPdx.z -= qakSin * direction.x * direction.y;
+
+    dPdz.x -= qakSin * direction.x * direction.y;
+    dPdz.y += verticalSlope * direction.y;
+    dPdz.z -= qakSin * direction.y * direction.y;
+
+    // Foam source is intentionally visual-only. It favors high positive phase,
+    // physically energetic waves (k*A), steepness and crest sharpening.
+    float crest = smoothstep(0.35, 0.98, s * 0.5 + 0.5);
+    float energy = clamp(k * abs(amplitude) * (0.35 + 0.65 * steepness), 0.0, 1.0);
+    crestSignal = max(crestSignal, crest * energy * (0.65 + 0.35 * sharpness));
+  }
+
+  void evaluatePlayableWater(vec3 position, out vec3 displaced, out vec3 normal, out float crestSignal) {
+    displaced = position;
+    vec3 dPdx = vec3(1.0, 0.0, 0.0);
+    vec3 dPdz = vec3(0.0, 0.0, 1.0);
+    crestSignal = 0.0;
+
+    accumulateWaterWave(position.xz, waterWaveDirAmp0, waterWaveParams0, waterWaveShape.x, displaced, dPdx, dPdz, crestSignal);
+    accumulateWaterWave(position.xz, waterWaveDirAmp1, waterWaveParams1, waterWaveShape.y, displaced, dPdx, dPdz, crestSignal);
+    accumulateWaterWave(position.xz, waterWaveDirAmp2, waterWaveParams2, waterWaveShape.z, displaced, dPdx, dPdz, crestSignal);
+    accumulateWaterWave(position.xz, waterWaveDirAmp3, waterWaveParams3, waterWaveShape.w, displaced, dPdx, dPdz, crestSignal);
+
+    normal = normalize(cross(dPdz, dPdx));
+  }
+
+  vec4 vert () {
+    StandardVertInput In;
+    CCVertInput(In);
+
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+
+    // Evaluate the analytical surface in WORLD space. Adjacent translated
+    // tiles therefore sample the same phase field and join without wave seams.
+    vec4 baseWorld = matWorld * In.position;
+    vec3 displacedWorld;
+    vec3 worldWaveNormal;
+    float localWaveCrest;
+    evaluatePlayableWater(baseWorld.xyz, displacedWorld, worldWaveNormal, localWaveCrest);
+    vec4 pos = vec4(displacedWorld, 1.0);
+
+    v_position = pos.xyz;
+    v_normal = worldWaveNormal;
+    v_tangent = normalize((matWorld * vec4(In.tangent.xyz, 0.0)).xyz);
+    v_bitangent = cross(v_normal, v_tangent) * In.tangent.w;
+
+    v_uv = a_texCoord;
+    #if HAS_SECOND_UV
+      v_uv1 = a_texCoord1;
+    #endif
+    v_color = a_color;
+    v_waveCrest = localWaveCrest;
+
+    CC_TRANSFER_FOG(pos);
+    CC_TRANSFER_SHADOW(pos);
+    return cc_matProj * cc_matView * pos;
+  }
+}%
+
+CCProgram unlit-fs %{
+  precision highp float;
+  #include <legacy/output>
+  #include <legacy/fog-fs>
+  #include <water-constants>
+
+  in vec2 v_uv;
+  in vec3 v_position;
+  in vec3 v_normal;
+  in float v_waveCrest;
+
+  uniform sampler2D mainTexture;
+  uniform sampler2D noiseTexture;
+  uniform samplerCube reflectTexture;
+  uniform sampler2D normalTextureA;
+  uniform sampler2D normalTextureB;
+  uniform sampler2D foamTexture;
+  uniform sampler2D wakeMaskTexture;
+
+  void addDynamicWake (
+    vec4 wakeData,
+    float wakeIntensityValue,
+    vec2 worldXZ,
+    inout float wakeFoam,
+    inout vec2 wakeNormal
+  ) {
+    float intensity = clamp(wakeIntensityValue, 0.0, 1.0);
+    if (intensity <= 0.0001) return;
+
+    vec2 direction = normalize(wakeData.zw + vec2(0.0001, 0.0));
+    vec2 delta = worldXZ - wakeData.xy;
+    float behind = dot(delta, -direction);
+    float lengthValue = max(0.01, dynamicWakeLength);
+    float widthValue = max(0.01, dynamicWakeWidth);
+    float normalizedBehind = clamp(behind / lengthValue, 0.0, 1.0);
+    float lateral = dot(delta, vec2(-direction.y, direction.x));
+
+    float headFade = smoothstep(0.0, lengthValue * 0.08, behind);
+    float tailFade = 1.0 - smoothstep(0.65, 1.0, normalizedBehind);
+    float halfWidth = mix(widthValue * 0.25, widthValue, normalizedBehind);
+    float widthFade = 1.0 - smoothstep(halfWidth, halfWidth + widthValue * 0.25, abs(lateral));
+    float center = 1.0 - smoothstep(halfWidth * 0.16, halfWidth * 0.78, abs(lateral));
+    float envelope = headFade * tailFade * widthFade * intensity;
+
+    float phaseA = behind * dynamicWakeRippleScale - cc_time.x * 2.4;
+    float phaseB = (behind * 1.45 + abs(lateral) * 0.8) * dynamicWakeRippleScale - cc_time.x * 3.1;
+    float waveA = sin(phaseA);
+    float waveB = sin(phaseB) * (1.0 - center);
+    float side = sign(lateral);
+    vec2 backDirection = -direction;
+    vec2 perpendicular = vec2(-direction.y, direction.x);
+
+    wakeNormal += (
+      backDirection * (waveA * (0.45 + center * 0.75))
+      - perpendicular * side * (0.35 + waveB * 0.3) * (1.0 - center)
+    ) * envelope * dynamicWakeNormalStrength;
+
+    float crestThreshold = clamp(dynamicWakeCrestFoamThreshold, 0.0, 0.98);
+    float crestA = smoothstep(crestThreshold, min(1.0, crestThreshold + 0.16), waveA * 0.5 + 0.5);
+    float crestB = smoothstep(crestThreshold, min(1.0, crestThreshold + 0.16), waveB * 0.5 + 0.5);
+    float bow = (1.0 - smoothstep(0.0, lengthValue * 0.14, behind)) * headFade * center * 0.45;
+    wakeFoam = max(wakeFoam, max((crestA * (0.55 + center * 0.45) + crestB * 0.35) * envelope, bow * intensity));
+  }
+
+  vec4 frag () {
+    vec2 surfaceUV = v_uv + v_position.xz * 0.1;
+    vec2 uvA = surfaceUV * normalScaleA
+      + vec2(cc_time.x * normalSpeedA, cc_time.x * normalSpeedA * 0.61);
+    vec2 uvB = surfaceUV * normalScaleB
+      + vec2(-cc_time.x * normalSpeedB * 0.53, cc_time.x * normalSpeedB);
+    vec2 normalA = texture(normalTextureA, uvA).rg * 2.0 - 1.0;
+    vec2 normalB = texture(normalTextureB, uvB).rg * 2.0 - 1.0;
+    vec2 animatedNormal = (normalA + normalB) * 0.5 * normalStrength * waveVisualAmount;
+
+    float dynamicWakeFoam = 0.0;
+    vec2 dynamicWakeNormal = vec2(0.0);
+    addDynamicWake(dynamicWakeData0, dynamicWakeIntensities.x, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    addDynamicWake(dynamicWakeData1, dynamicWakeIntensities.y, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    addDynamicWake(dynamicWakeData2, dynamicWakeIntensities.z, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    addDynamicWake(dynamicWakeData3, dynamicWakeIntensities.w, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    addDynamicWake(dynamicWakeData4, dynamicWakeIntensity4, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    animatedNormal += dynamicWakeNormal * waveVisualAmount;
+
+    vec3 N = normalize(v_normal + vec3(animatedNormal.x, 0.0, animatedNormal.y));
+    vec3 V = normalize(v_position - cc_cameraPos.xyz);
+    vec3 R = reflect(V, N);
+    R.xz += animatedNormal * reflectionDistortion;
+    vec4 reflectColor = texture(reflectTexture, normalize(R));
+    float fresnel = pow(clamp(1.0 - dot(N, -V), 0.0, 1.0), max(0.001, fresnelPow));
+
+    vec4 col = mainColor * texture(mainTexture, v_uv);
+    vec3 tint = mix(shallowColor.rgb, deepColor.rgb, clamp(v_uv.y, 0.0, 1.0));
+    col.rgb = mix(col.rgb, tint, depthTintStrength);
+    col.rgb = mix(col.rgb, reflectColor.rgb, clamp(fReflect * fresnel * fresnelIntensity, 0.0, 1.0));
+    col.rgb *= 1.0 - clamp(shadowReceiverStrength, 0.0, 1.0) * 0.18;
+
+    vec2 foamUV = surfaceUV * foamScale
+      + vec2(cc_time.x * foamSpeed, -cc_time.x * foamSpeed * 0.37);
+    float foamNoise = mix(
+      texture(noiseTexture, foamUV + animatedNormal * 0.12).r,
+      texture(foamTexture, foamUV).r,
+      0.5
+    );
+    float foam = smoothstep(foamThresholdLow, max(foamThresholdHigh, foamThresholdLow + 0.0001), foamNoise)
+      * foamIntensity;
+    float edgeDistance = min(min(v_uv.x, 1.0 - v_uv.x), min(v_uv.y, 1.0 - v_uv.y));
+    float edgeBand = 1.0 - smoothstep(0.0, max(0.001, edgeFoamWidth), edgeDistance);
+    float edgeBreakup = mix(1.0, smoothstep(0.2, 0.8, foamNoise), clamp(edgeFoamNoiseAmount, 0.0, 1.0));
+    float dynamicWakeFoamBreakup = mix(0.35, 1.0, smoothstep(0.28, 0.8, foamNoise));
+
+    float crestMask = smoothstep(
+      clamp(crestFoamThreshold, 0.0, 0.98),
+      min(1.0, clamp(crestFoamThreshold, 0.0, 0.98) + 0.22),
+      clamp(v_waveCrest, 0.0, 1.0)
+    );
+    float crestBreakup = mix(
+      1.0,
+      smoothstep(0.18, 0.88, foamNoise),
+      clamp(crestFoamNoiseAmount, 0.0, 1.0)
+    );
+    float analyticalCrestFoam = crestMask * crestBreakup * max(0.0, crestFoamIntensity);
+
+    foam = clamp(
+      foam
+        + analyticalCrestFoam
+        + texture(wakeMaskTexture, v_uv * wakeScale).r * wakeIntensity
+        + edgeBand * edgeBreakup * edgeFoamIntensity
+        + dynamicWakeFoam * dynamicWakeFoamIntensity * dynamicWakeFoamBreakup,
+      0.0,
+      1.0
+    );
+    col.rgb = mix(col.rgb, foamColor.rgb, foam * foamColor.a);
+
+    vec2 D = v_uv - vec2(0.5, 0.5);
+    col.rgb = mix(col.rgb, rimColor.rgb, rimColor.a * smoothstep(0.0, 0.3, dot(D, D)));
+    col.a *= waterAlpha;
+
+    CC_APPLY_FOG(col, v_position);
+    return CCFragOutput(col);
+  }
+}%

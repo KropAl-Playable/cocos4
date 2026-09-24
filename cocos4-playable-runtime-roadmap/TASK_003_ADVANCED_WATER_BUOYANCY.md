@@ -4,6 +4,37 @@
 
 Implement a visually rich but compact water system for playable ads, with a lightweight CPU buoyancy model that matches the visible GPU surface.
 
+## Implementation status
+
+Initial Task 003 foundation is now implemented on `feat/advanced-water-buoyancy`:
+
+- ✅ shared bounded 1–4 wave Gerstner evaluator;
+- ✅ analytical displaced position, normal and surface velocity on CPU;
+- ✅ authoritative `cc.WaterSurface` component with four serializable wave definitions;
+- ✅ component-owned time shared with the material instead of relying on GPU-only clock state;
+- ✅ isolated `advanced/playable-water.effect` fork; stock Advanced Water remains untouched;
+- ✅ analytical GPU vertex displacement and large-wave normal reconstruction using the same equations;
+- ✅ WebGL-friendly fixed four-wave uniform layout;
+- ✅ zero per-vertex CPU work and no allocation in the steady-state CPU sampling path;
+- ✅ first unit-test coverage for the shared wave convention;
+- ✅ bounded Stokes-like crest sharpening shared by CPU and GPU;
+- ✅ analytical crest-foam signal based on wave phase/energy/steepness with noise breakup.
+
+Next gates:
+
+- ✅ local Creator 3.8.8 compile/render validation of `playable-water.effect`;
+- ✅ local validation/tuning of crest sharpening and crest foam;
+- ✅ CPU-vs-GPU surface agreement marker/debug visualization;
+- ✅ 4-point `WaterBuoyancy` prototype with dynamic RigidBody integration;
+- ✅ world-space sampling compensates Gerstner horizontal displacement with a bounded inverse solve;
+- ✅ bounded five-source wake API wired to the stylized water shader;
+- ✅ WaterSurface now rebinds component-owned wave state after Editor material recreation/reimport;
+- ✅ nested WaterWave authoring data uses a browser-safe constructor-free serializable shape;
+- ✅ one WaterSurface can drive all child MeshRenderers for tiled water fields;
+- ✅ analytical waves are evaluated in world space, so adjacent translated tiles share one seamless phase field;
+- ⏳ browser validation of persisted custom wave values after the serialization fix;
+- ⏳ quality tiers and final performance pass.
+
 The key requirement is:
 
 > **one wave definition, two consumers**
