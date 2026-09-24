@@ -38,6 +38,10 @@ export class WaterWave implements IWaterWave {
     public steepness = 0.35;
 
     @property({ type: CCFloat })
+    @range([0, 1, 0.001])
+    public crestSharpness = 0.25;
+
+    @property({ type: CCFloat })
     public phase = 0;
 
     constructor(
@@ -47,6 +51,7 @@ export class WaterWave implements IWaterWave {
         speed = 1,
         steepness = 0.35,
         phase = 0,
+        crestSharpness = 0.25,
     ) {
         this.direction.set(direction);
         this.amplitude = amplitude;
@@ -54,6 +59,7 @@ export class WaterWave implements IWaterWave {
         this.speed = speed;
         this.steepness = steepness;
         this.phase = phase;
+        this.crestSharpness = crestSharpness;
     }
 }
 
@@ -135,6 +141,7 @@ export class WaterSurface extends Component {
     private _materialInstances: ReturnType<MeshRenderer['getMaterialInstance']>[] = [];
     private _waveDirAmp: Vec4[] = [new Vec4(), new Vec4(), new Vec4(), new Vec4()];
     private _waveParams: Vec4[] = [new Vec4(), new Vec4(), new Vec4(), new Vec4()];
+    private _waveShape = new Vec4();
     private _timeParams = new Vec4();
 
     public get time(): number {
@@ -275,6 +282,12 @@ export class WaterSurface extends Component {
                 i < count ? 1 : 0,
             );
         }
+        this._waveShape.set(
+            Math.max(0, Math.min(1, waves[0].crestSharpness)),
+            Math.max(0, Math.min(1, waves[1].crestSharpness)),
+            Math.max(0, Math.min(1, waves[2].crestSharpness)),
+            Math.max(0, Math.min(1, waves[3].crestSharpness)),
+        );
         this._timeParams.set(this._time, count, 0, 0);
 
         for (const material of this._materialInstances) {
@@ -286,6 +299,8 @@ export class WaterSurface extends Component {
                     handle = pass.getHandle(`waterWaveParams${i}`);
                     if (handle) pass.setUniform(handle, this._waveParams[i]);
                 }
+                const shapeHandle = pass.getHandle('waterWaveShape');
+                if (shapeHandle) pass.setUniform(shapeHandle, this._waveShape);
                 const timeHandle = pass.getHandle('waterWaveTime');
                 if (timeHandle) pass.setUniform(timeHandle, this._timeParams);
             }
