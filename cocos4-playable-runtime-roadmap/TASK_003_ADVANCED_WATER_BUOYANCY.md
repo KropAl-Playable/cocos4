@@ -23,9 +23,10 @@ Initial Task 003 foundation is now implemented on `feat/advanced-water-buoyancy`
 Next gates:
 
 - ✅ local Creator 3.8.8 compile/render validation of `playable-water.effect`;
-- ⏳ local validation/tuning of crest sharpening and crest foam;
-- ⏳ CPU-vs-GPU surface agreement marker/debug visualization;
-- ⏳ 4-point `WaterBuoyancy` prototype;
+- ✅ local validation/tuning of crest sharpening and crest foam;
+- ✅ CPU-vs-GPU surface agreement marker/debug visualization;
+- ✅ 4-point `WaterBuoyancy` prototype with dynamic RigidBody integration;
+- ✅ world-space sampling compensates Gerstner horizontal displacement with a bounded inverse solve;
 - ⏳ bounded wake/ripple sources and quality tiers.
 
 The key requirement is:
