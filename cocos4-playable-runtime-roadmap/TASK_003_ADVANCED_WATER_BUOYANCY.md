@@ -27,7 +27,9 @@ Next gates:
 - ✅ CPU-vs-GPU surface agreement marker/debug visualization;
 - ✅ 4-point `WaterBuoyancy` prototype with dynamic RigidBody integration;
 - ✅ world-space sampling compensates Gerstner horizontal displacement with a bounded inverse solve;
-- ⏳ bounded wake/ripple sources and quality tiers.
+- ✅ bounded five-source wake API wired to the stylized water shader;
+- ✅ WaterSurface now rebinds component-owned wave state after Editor material recreation/reimport;
+- ⏳ quality tiers and final performance pass.
 
 The key requirement is:
 
