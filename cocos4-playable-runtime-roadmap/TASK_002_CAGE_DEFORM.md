@@ -10,7 +10,7 @@ Implement lightweight GPU-driven deformation for trees, initially to simulate:
 
 The first prototype is deliberately **not** a full tetrahedral cage system.
 
-## Implementation status — v0.1 completion pass
+## Implementation status — v0.1 complete
 
 Implemented on `feat/cage-deform`:
 
@@ -25,16 +25,21 @@ Implemented on `feat/cage-deform`:
 - ✅ isolated `builtin-standard-cage.effect`;
 - ✅ packed Vertex AO support in the cage material;
 - ✅ persistent editor Cage Baker prototype;
-- ✅ cage influences use glTF round-trippable `TEXCOORD_2..5` streams;
-- ✅ baked meshes are consumed directly without runtime influence generation.
+- ✅ cage influences persist through standard glTF `JOINTS_0` / `WEIGHTS_0` streams on static meshes;
+- ✅ baked meshes are consumed directly without runtime influence generation;
+- ✅ Cage Baker validated in Creator 3.8.8;
+- ✅ component-integrated Bake Cage Data workflow;
+- ✅ baked/runtime diagnostic status in Inspector and console;
+- ✅ selected-control influence heatmap;
+- ✅ Vertex AO + cage data coexist in the isolated cage material pipeline.
 
-Still required before v0.1 is called complete:
+v0.1 functional scope is complete. Remaining work is production validation rather than implementation:
 
-- ⏳ build and validate the Cage Baker inside Creator 3.8.8;
-- ⏳ verify `COLOR_0` AO + `TEXCOORD_2..5` cage data survive GLB import together;
-- ⏳ validate Debug Draw after the camera renderer fix;
-- ⏳ add/select an influence visualization or heatmap path;
-- ⏳ production/mobile benchmark and failure-case pass.
+- ⏳ final Debug Draw smoke test on representative scenes;
+- ⏳ final `addImpulse()` smoke test on baked assets;
+- ⏳ repeated-instance/mobile/WebGL benchmark and failure-case pass.
+
+These checks stay in the regression/benchmark matrix and do not block Task 003.
 
 Recommended asset order when AO + Cage are combined:
 
@@ -43,7 +48,7 @@ source Mesh
    ↓
 AO Baker        → COLOR_0
    ↓
-Cage Baker      → preserves COLOR_0, adds TEXCOORD_2..5
+Cage Baker      → preserves COLOR_0, adds JOINTS_0 + WEIGHTS_0
    ↓
 persistent GLB Mesh
    ↓
