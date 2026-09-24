@@ -209,7 +209,7 @@ CCProgram surface-vertex %{
     EvaluatePlayableWater(In.position.xyz, displaced, waveNormal);
     return waveNormal;
   }
-}
+}%
 
 CCProgram surface-fragment %{
   #if USE_ALBEDO_MAP
