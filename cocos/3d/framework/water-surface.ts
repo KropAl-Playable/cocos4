@@ -195,7 +195,21 @@ export class WaterSurface extends Component {
 
         const count = Math.max(1, Math.min(MAX_WATER_WAVES, Math.floor(this.waveCount)));
         const waves = this.waves;
-        sampleGerstnerWaves(_localPoint.x, _localPoint.z, this._time, waves, _localSample, count);
+
+        // World-space gameplay queries address the visible XZ location, while
+        // Gerstner waves are parameterized by their undeformed XZ coordinates.
+        // A few fixed-point iterations invert the small horizontal displacement
+        // without any mesh query or allocation.
+        const targetX = _localPoint.x;
+        const targetZ = _localPoint.z;
+        let queryX = targetX;
+        let queryZ = targetZ;
+        for (let i = 0; i < 3; ++i) {
+            sampleGerstnerWaves(queryX, queryZ, this._time, waves, _localSample, count);
+            queryX -= _localSample.position.x - targetX;
+            queryZ -= _localSample.position.z - targetZ;
+        }
+        sampleGerstnerWaves(queryX, queryZ, this._time, waves, _localSample, count);
 
         Vec3.transformMat4(_worldPosition, _localSample.position, this.node.worldMatrix);
         Vec3.transformMat4Normal(_worldNormal, _localSample.normal, this.node.worldMatrix);
