@@ -1,110 +1,103 @@
-// Copyright (c) 2017-2022 Xiamen Yaji Software Co., Ltd.
-
+// Playable water: stylized visual stack + shared analytical Gerstner displacement.
+// CPU gameplay sampling is owned by cc.WaterSurface and uses the same four-wave contract.
 CCEffect %{
   techniques:
   - name: opaque
     passes:
-    - vert: standard-vs
-      frag: standard-fs
+    - vert: playable-water-vs:vert
+      frag: unlit-fs:frag
       properties: &props
-        mainColor:                        { value: [1.0, 1.0, 1.0, 1.0], target: albedo, linear: true, editor: { displayName: Albedo, type: color } }
-        normalStrength:                   { value: 1.0, target: pbrParams.w, editor: { parent: USE_NORMAL_MAP, slide: true, range: [0, 5.0], step: 0.001 } }
-        mainTexture:                      { value: grey, target: albedoMap, editor: { displayName: AlbedoMap } }
-        roughness:                        { value: 0.5, target: pbrParams.y, editor: { slide: true, range: [0, 1.0], step: 0.001 } }
-        fresnelIntensity:                 { value: 1.5, target: pbrParams.z, editor: { slide: true, range: [0, 3.0], step: 0.001 } }
-        normalMap:                        { value: normal, editor : { parent: USE_NORMAL_MAP } }
-        normalMapDetailed:                { value: normal, editor : { parent: USE_NORMAL_MAP, tooltip: i18n:ENGINE.assets.effect.propertyTips.normalMap } }
-        baseTiling:                       { value: 100.0, target: pbrParams.x, editor: { parent: USE_NORMAL_MAP, range: [1.0, 10000.0] } }
-        waterSpeed:                       { value: 0.2, target: waterParam.x, editor: { parent: USE_NORMAL_MAP, slide: true, range: [0, 3.0], step: 0.001 } }
-        detailedSpeed:                    { value: 0.2, target: waterParam.y, editor: { parent: USE_NORMAL_MAP, slide: true, range: [0, 3.0], step: 0.001 } }
-        detailedTiling:                   { value: 0.2, target: waterParam.z, editor: { parent: USE_NORMAL_MAP, slide: true, range: [0, 1.0], step: 0.001 } }
-        detailedIntensity:                { value: 0.5, target: waterParam.w, editor: { parent: USE_NORMAL_MAP, slide: true, range: [0, 1.0], step: 0.001 } }
-        waterInScatterColor:              { value: [0.07, 0.13, 0.087, 1.0], target: waterColor, linear: true, editor: { parent: USE_WATER_SCATTERING, type: color } }
-        waterScatterCoef:                 { value: 3.0, target: waterColor.w, editor: { parent: USE_WATER_SCATTERING, range: [0, 10.0], tooltip: 'The higher the value, the more turbid or deeper the water is.' } }
-        waterWaveDirAmp0:                 { value: [1.0, 0.0, 0.18, 0.35], editor: { visible: false } }
-        waterWaveDirAmp1:                 { value: [-0.41, 0.91, 0.10, 0.28], editor: { visible: false } }
-        waterWaveDirAmp2:                 { value: [0.79, 0.62, 0.055, 0.20], editor: { visible: false } }
-        waterWaveDirAmp3:                 { value: [-0.94, -0.35, 0.035, 0.16], editor: { visible: false } }
-        waterWaveParams0:                 { value: [4.5, 1.0, 0.0, 1.0], editor: { visible: false } }
-        waterWaveParams1:                 { value: [2.8, 0.72, 1.7, 1.0], editor: { visible: false } }
-        waterWaveParams2:                 { value: [1.6, 0.48, 3.4, 1.0], editor: { visible: false } }
-        waterWaveParams3:                 { value: [0.95, 0.34, 5.1, 0.0], editor: { visible: false } }
-        waterWaveTime:                    { value: [0.0, 3.0, 0.0, 0.0], editor: { visible: false } }
-      rasterizerState: &r1
-        cullMode: none
-    - &forward-add
-      vert: standard-vs
-      frag: standard-fs
-      phase: forward-add
-      propertyIndex: 0
-      embeddedMacros: { CC_FORWARD_ADD: true }
-      rasterizerState:
-        cullMode: none
-      depthStencilState:
-        depthFunc: equal
-        depthTest: true
-        depthWrite: false
-      blendState:
-        targets:
-        - blend: true
-          blendSrc: one
-          blendDst: one
-          blendSrcAlpha: zero
-          blendDstAlpha: one
-    - &shadow-caster
-      vert: shadow-caster-vs
-      frag: shadow-caster-fs
-      phase: shadow-caster
-      propertyIndex: 0
-      rasterizerState:
-        cullMode: front
-      properties:
-        mainColor:      { value: [1.0, 1.0, 1.0, 1.0], target: albedo, editor: { displayName: Albedo, type: color } }
-        mainTexture:    { value: grey, target: albedoMap, editor: { displayName: AlbedoMap } }
-    - &reflect-map
-      vert: standard-vs
-      frag: reflect-map-fs
-      phase: reflect-map
-      propertyIndex: 0
-    - &deferred-forward
-      vert: standard-vs
-      frag: standard-fs
-      phase: deferred-forward
-      propertyIndex: 0
-      rasterizerState: *r1
+        mainTexture:          { value: white }
+        mainColor:            { value: [1, 1, 1, 1], editor: { type: color } }
+        reflectTexture:       { value: white }
+        fReflect:             { value: 0.5, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        fresnelPow:           { value: 1.0 }
+        noiseTexture:         { value: white }
+        rimColor:             { value: [1, 1, 1, 1], editor: { type: color } }
+        normalTextureA:       { value: normal }
+        normalTextureB:       { value: normal }
+        foamTexture:          { value: white }
+        wakeMaskTexture:      { value: white }
+        shallowColor:         { value: [0.12, 0.65, 0.78, 1], editor: { type: color } }
+        deepColor:            { value: [0.02, 0.22, 0.4, 1], editor: { type: color } }
+        foamColor:            { value: [1, 1, 1, 1], editor: { type: color } }
+        waterAlpha:           { value: 0.78, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        normalStrength:       { value: 0.5, editor: { slide: true, range: [0, 2], step: 0.01 } }
+        normalScaleA:         { value: 2.0 }
+        normalScaleB:         { value: 3.25 }
+        normalSpeedA:         { value: 0.035 }
+        normalSpeedB:         { value: 0.025 }
+        foamScale:            { value: 2.0 }
+        foamSpeed:            { value: 0.04 }
+        foamIntensity:        { value: 0.25, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        foamThresholdLow:     { value: 0.58 }
+        foamThresholdHigh:    { value: 0.78 }
+        wakeIntensity:        { value: 0.0, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        wakeScale:            { value: 1.0 }
+        waveVisualAmount:     { value: 1.0, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        fresnelIntensity:     { value: 0.7, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        reflectionDistortion: { value: 0.04, editor: { slide: true, range: [0, 0.2], step: 0.001 } }
+        depthTintStrength:    { value: 0.35, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        shadowReceiverStrength: { value: 0.3, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        edgeFoamIntensity:    { value: 0.48, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        edgeFoamWidth:        { value: 0.075, editor: { slide: true, range: [0.001, 0.5], step: 0.001 } }
+        edgeFoamNoiseAmount:  { value: 0.35, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        dynamicWakeFoamIntensity:   { value: 0.16, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        dynamicWakeNormalStrength:  { value: 0.7, editor: { slide: true, range: [0, 2], step: 0.01 } }
+        dynamicWakeLength:          { value: 3.4 }
+        dynamicWakeWidth:           { value: 0.8 }
+        dynamicWakeRippleScale:     { value: 7.0 }
+        dynamicWakeCrestFoamThreshold: { value: 0.78, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        dynamicWakeData0:           { value: [0, 0, -1, 0], editor: { visible: false } }
+        dynamicWakeData1:           { value: [0, 0, -1, 0], editor: { visible: false } }
+        dynamicWakeData2:           { value: [0, 0, -1, 0], editor: { visible: false } }
+        dynamicWakeData3:           { value: [0, 0, -1, 0], editor: { visible: false } }
+        dynamicWakeData4:           { value: [0, 0, -1, 0], editor: { visible: false } }
+        dynamicWakeIntensities:     { value: [0, 0, 0, 0], editor: { visible: false } }
+        dynamicWakeIntensity4:      { value: 0.0, editor: { visible: false } }
+
+        # Shared gameplay/render wave contract. Hidden: authored by WaterSurface.
+        waterWaveDirAmp0:           { value: [1.0, 0.0, 0.18, 0.35], editor: { visible: false } }
+        waterWaveDirAmp1:           { value: [-0.41, 0.91, 0.10, 0.28], editor: { visible: false } }
+        waterWaveDirAmp2:           { value: [0.79, 0.62, 0.055, 0.20], editor: { visible: false } }
+        waterWaveDirAmp3:           { value: [-0.94, -0.35, 0.035, 0.16], editor: { visible: false } }
+        waterWaveParams0:           { value: [4.5, 1.0, 0.0, 1.0], editor: { visible: false } }
+        waterWaveParams1:           { value: [2.8, 0.72, 1.7, 1.0], editor: { visible: false } }
+        waterWaveParams2:           { value: [1.6, 0.48, 3.4, 1.0], editor: { visible: false } }
+        waterWaveParams3:           { value: [0.95, 0.34, 5.1, 0.0], editor: { visible: false } }
+        waterWaveTime:              { value: [0.0, 3.0, 0.0, 0.0], editor: { visible: false } }
+
+        waterPadding0:              { value: 0.0, editor: { visible: false } }
+        waterPadding1:              { value: 0.0, editor: { visible: false } }
+
   - name: transparent
     passes:
-    - vert: standard-vs
-      frag: standard-fs
-      embeddedMacros: { CC_FORCE_FORWARD_SHADING: true }
-      depthStencilState: &d1
-        depthTest: true
-        depthWrite: false
-      blendState: &b1
+    - vert: playable-water-vs:vert
+      frag: unlit-fs:frag
+      blendState:
         targets:
         - blend: true
           blendSrc: src_alpha
           blendDst: one_minus_src_alpha
+          blendSrcAlpha: src_alpha
           blendDstAlpha: one_minus_src_alpha
       properties: *props
-    - *forward-add
-    - *shadow-caster
-    - &deferred-forward-transparent
-      vert: standard-vs
-      frag: standard-fs
-      embeddedMacros: { CC_PIPELINE_TYPE: 0 }
-      phase: deferred-forward
-      depthStencilState: *d1
-      blendState: *b1
-      propertyIndex: 0
 }%
 
-CCProgram shared-ubos %{
-  uniform Constants {
-    vec4 albedo;
-    vec4 pbrParams;
-    vec4 waterParam;
-    vec4 waterColor;
+CCProgram water-constants %{
+  uniform Constant {
+    vec4 mainColor;
+    vec4 rimColor;
+    vec4 shallowColor;
+    vec4 deepColor;
+    vec4 foamColor;
+    vec4 dynamicWakeData0;
+    vec4 dynamicWakeData1;
+    vec4 dynamicWakeData2;
+    vec4 dynamicWakeData3;
+    vec4 dynamicWakeData4;
+    vec4 dynamicWakeIntensities;
+
     vec4 waterWaveDirAmp0;
     vec4 waterWaveDirAmp1;
     vec4 waterWaveDirAmp2;
@@ -114,38 +107,75 @@ CCProgram shared-ubos %{
     vec4 waterWaveParams2;
     vec4 waterWaveParams3;
     vec4 waterWaveTime;
+
+    float fReflect;
+    float fresnelPow;
+    float waterAlpha;
+    float normalStrength;
+    float normalScaleA;
+    float normalScaleB;
+    float normalSpeedA;
+    float normalSpeedB;
+    float foamScale;
+    float foamSpeed;
+    float foamIntensity;
+    float foamThresholdLow;
+    float foamThresholdHigh;
+    float wakeIntensity;
+    float wakeScale;
+    float waveVisualAmount;
+    float fresnelIntensity;
+    float reflectionDistortion;
+    float depthTintStrength;
+    float shadowReceiverStrength;
+    float edgeFoamIntensity;
+    float edgeFoamWidth;
+    float edgeFoamNoiseAmount;
+    float dynamicWakeFoamIntensity;
+    float dynamicWakeNormalStrength;
+    float dynamicWakeLength;
+    float dynamicWakeWidth;
+    float dynamicWakeRippleScale;
+    float dynamicWakeIntensity4;
+    float dynamicWakeCrestFoamThreshold;
+    float waterPadding0;
+    float waterPadding1;
   };
 }%
 
-CCProgram macro-remapping %{
-  // ui displayed macros
-  #pragma define-meta HAS_SECOND_UV
-  #pragma define-meta USE_TWOSIDE editor({ tooltip: i18n:ENGINE.assets.effect.propertyTips.USE_TWOSIDE })
+CCProgram playable-water-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/local-batch>
+  #include <legacy/fog-vs>
+  #include <legacy/shadow-map-vs>
+  #include <water-constants>
 
-  #define CC_SURFACES_USE_SECOND_UV HAS_SECOND_UV
-  #define CC_SURFACES_USE_TWO_SIDED USE_TWOSIDE
-  #define CC_SURFACES_LIGHTING_USE_FRESNEL 1
-  #define CC_SURFACES_LIGHTING_TRANSMIT_SPECULAR 1
+  in vec4 a_color;
+  #if HAS_SECOND_UV
+    in vec2 a_texCoord1;
+  #endif
 
-  // depend on UI macros
-#if USE_NORMAL_MAP
-  #define CC_SURFACES_USE_TANGENT_SPACE 1
-#endif
-}%
+  out vec3 v_position;
+  out vec3 v_normal;
+  out vec3 v_tangent;
+  out vec3 v_bitangent;
+  out vec2 v_uv;
+  out vec2 v_uv1;
+  out vec4 v_color;
 
-CCProgram surface-vertex %{
   const float WATER_TWO_PI = 6.28318530718;
 
-  void AccumulateWaterWave(
+  void accumulateWaterWave(
     vec2 xz,
     vec4 dirAmp,
     vec4 params,
     inout vec3 displaced,
     inout vec3 dPdx,
-    inout vec3 dPdz)
-  {
-    float enabled = params.w;
-    if (enabled < 0.5 || abs(dirAmp.z) < 0.000001) return;
+    inout vec3 dPdz
+  ) {
+    if (params.w < 0.5 || abs(dirAmp.z) < 0.000001) return;
 
     vec2 direction = dirAmp.xy;
     float dirLength = max(length(direction), 0.000001);
@@ -156,7 +186,6 @@ CCProgram surface-vertex %{
     float wavelength = max(abs(params.x), 0.000001);
     float speed = params.y;
     float phase = params.z;
-
     float k = WATER_TWO_PI / wavelength;
     float theta = k * (dot(direction, xz) - speed * waterWaveTime.x) + phase;
     float s = sin(theta);
@@ -178,230 +207,178 @@ CCProgram surface-vertex %{
     dPdz.z -= qakSin * direction.y * direction.y;
   }
 
-  void EvaluatePlayableWater(vec3 position, out vec3 displaced, out vec3 normal)
-  {
+  void evaluatePlayableWater(vec3 position, out vec3 displaced, out vec3 normal) {
     displaced = position;
     vec3 dPdx = vec3(1.0, 0.0, 0.0);
     vec3 dPdz = vec3(0.0, 0.0, 1.0);
 
-    AccumulateWaterWave(position.xz, waterWaveDirAmp0, waterWaveParams0, displaced, dPdx, dPdz);
-    AccumulateWaterWave(position.xz, waterWaveDirAmp1, waterWaveParams1, displaced, dPdx, dPdz);
-    AccumulateWaterWave(position.xz, waterWaveDirAmp2, waterWaveParams2, displaced, dPdx, dPdz);
-    AccumulateWaterWave(position.xz, waterWaveDirAmp3, waterWaveParams3, displaced, dPdx, dPdz);
+    accumulateWaterWave(position.xz, waterWaveDirAmp0, waterWaveParams0, displaced, dPdx, dPdz);
+    accumulateWaterWave(position.xz, waterWaveDirAmp1, waterWaveParams1, displaced, dPdx, dPdz);
+    accumulateWaterWave(position.xz, waterWaveDirAmp2, waterWaveParams2, displaced, dPdx, dPdz);
+    accumulateWaterWave(position.xz, waterWaveDirAmp3, waterWaveParams3, displaced, dPdx, dPdz);
 
     normal = normalize(cross(dPdz, dPdx));
   }
 
-  #define CC_SURFACES_VERTEX_MODIFY_LOCAL_POS
-  vec3 SurfacesVertexModifyLocalPos(in SurfacesStandardVertexIntermediate In)
-  {
+  vec4 vert () {
+    StandardVertInput In;
+    CCVertInput(In);
+
     vec3 displaced;
-    vec3 waveNormal;
-    EvaluatePlayableWater(In.position.xyz, displaced, waveNormal);
-    return displaced;
-  }
+    vec3 localWaveNormal;
+    evaluatePlayableWater(In.position.xyz, displaced, localWaveNormal);
+    In.position.xyz = displaced;
+    In.normal = localWaveNormal;
 
-  #define CC_SURFACES_VERTEX_MODIFY_LOCAL_NORMAL
-  vec3 SurfacesVertexModifyLocalNormal(in SurfacesStandardVertexIntermediate In)
-  {
-    vec3 displaced;
-    vec3 waveNormal;
-    EvaluatePlayableWater(In.position.xyz, displaced, waveNormal);
-    return waveNormal;
-  }
-}%
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
 
-CCProgram surface-fragment %{
-  #if USE_ALBEDO_MAP
-    uniform sampler2D albedoMap;
-    #pragma define-meta ALBEDO_UV options([v_uv, v_uv1])
-  #endif
-  #if USE_NORMAL_MAP
-    uniform sampler2D normalMap;
-    uniform sampler2D normalMapDetailed;
-    #pragma define-meta NORMAL_UV options([v_uv, v_uv1])
-  #endif
-  #pragma define-meta DEFAULT_UV options([v_uv, v_uv1])
+    vec4 pos = matWorld * In.position;
 
+    v_position = pos.xyz;
+    v_normal = normalize((matWorldIT * vec4(In.normal, 0.0)).xyz);
+    v_tangent = normalize((matWorld * vec4(In.tangent.xyz, 0.0)).xyz);
+    v_bitangent = cross(v_normal, v_tangent) * In.tangent.w;
 
-  #define CC_SURFACES_FRAGMENT_MODIFY_BASECOLOR_AND_TRANSPARENCY
-  vec4 SurfacesFragmentModifyBaseColorAndTransparency()
-  {
-    vec4 baseColor = albedo;
-
-    #if USE_VERTEX_COLOR
-      baseColor.rgb *= SRGBToLinear(FSInput_vertexColor.rgb); // use linear
-      baseColor.a *= FSInput_vertexColor.a;
+    v_uv = a_texCoord;
+    #if HAS_SECOND_UV
+      v_uv1 = a_texCoord1;
     #endif
+    v_color = a_color;
 
-    #if USE_ALBEDO_MAP
-      vec4 texColor = texture(albedoMap, ALBEDO_UV);
-      texColor.rgb = SRGBToLinear(texColor.rgb);
-      baseColor *= texColor;
-    #endif
-
-    return baseColor;
-  }
-
-  #define CC_SURFACES_FRAGMENT_ALPHA_CLIP_ONLY
-  void SurfacesFragmentAlphaClipOnly()
-  {
-  }
-
-  #include <common/effect/special-effects>
-  vec3 GetDetailedNormal(vec2 texCoord, float tiling, sampler2D normalMap, sampler2D normalMapDetailed, vec3 N, vec3 T)
-  {
-    float waterSpeed = waterParam.x;
-    float detailedSpeed = waterParam.y;
-    float detailedTiling = waterParam.z * tiling;
-    float detailedIntensity = waterParam.w;
-    float normalIntensity = pbrParams.w;
-
-    vec2 uv = texCoord * tiling + vec2(cc_time.w, cc_time.w) * waterSpeed;
-    vec3 nmmp = texture(normalMap, uv).xyz - vec3(0.5);
-    vec2 uvDetailed = texCoord * detailedTiling + vec2(0.0, cc_time.w) * detailedSpeed;
-    vec3 nmmpDetailed = texture(normalMapDetailed, uvDetailed).xyz - vec3(0.5);
-    // normal blending
-    nmmp = BlendDetailedNormalMap(nmmp, nmmpDetailed, detailedIntensity);
-    return normalize(CalculateNormalFromTangentSpace(nmmp, normalIntensity, N, T, FSInput_mirrorNormal));
-  }
-
-
-  #define CC_SURFACES_FRAGMENT_MODIFY_WORLD_NORMAL
-  vec3 SurfacesFragmentModifyWorldNormal()
-  {
-    vec3 normal = FSInput_worldNormal;
-    #if USE_NORMAL_MAP
-      normal = GetDetailedNormal(NORMAL_UV, pbrParams.x, normalMap, normalMapDetailed, normalize(normal), normalize(FSInput_worldTangent));
-    #endif
-
-    return normalize(normal);
-  }
-
-  #define CC_SURFACES_FRAGMENT_MODIFY_IOR
-  float SurfacesFragmentModifyIOR()
-  {
-      return 1.33;
-  }
-#define CC_SURFACES_FRAGMENT_MODIFY_TRANSMIT_SCATTERING_PARAMS
-vec4 SurfacesFragmentModifyTransmitScatteringParams()
-{
-  #if USE_WATER_SCATTERING
-    float depth = max(abs(FSInput_texcoord.x - 0.5), abs(FSInput_texcoord.y - 0.5)) * 2.0;
-    depth = saturate(1.0 - depth);
-    return vec4(waterColor.w, 1.0, 1.0, depth);
-  #else
-    return vec4(0.0, 0.0, 0.0, 0.0);
-  #endif
-}
-
-#define CC_SURFACES_FRAGMENT_MODIFY_TRANSMIT_IN_SCATTERING_COLOR
-vec3 SurfacesFragmentModifyTransmitInScatteringColor()
-{
-    return waterColor.rgb;
-}
-
-  #include <surfaces/data-structures/standard>
-  #include <lighting-models/includes/common>
-  #define CC_SURFACES_LIGHTING_MODIFY_FINAL_RESULT
-  void SurfacesLightingModifyFinalResult(inout LightingResult result, in LightingIntermediateData lightingData, in SurfacesMaterialData surfaceData, in LightingMiscData miscData)
-  {
-    #if CC_SURFACES_LIGHTING_USE_FRESNEL
-      result.fresnel = saturate(result.fresnel * pbrParams.z);
+    CC_TRANSFER_FOG(pos);
+    CC_TRANSFER_SHADOW(pos);
+    #if CC_USE_2D
+      return cc_matProj * cc_matView * In.position;
+    #else
+      return cc_matProj * (cc_matView * matWorld) * In.position;
     #endif
   }
+}%
 
-  #define CC_SURFACES_FRAGMENT_MODIFY_PBRPARAMS
-  vec4 SurfacesFragmentModifyPBRParams()
-  {
-    // ao, roughness, metallic, specularIntensity
-    return vec4(1.0, pbrParams.y, 1.0, 0.5);
+CCProgram unlit-fs %{
+  precision highp float;
+  #include <legacy/output>
+  #include <legacy/fog-fs>
+  #include <water-constants>
+
+  in vec2 v_uv;
+  in vec3 v_position;
+  in vec3 v_normal;
+
+  uniform sampler2D mainTexture;
+  uniform sampler2D noiseTexture;
+  uniform samplerCube reflectTexture;
+  uniform sampler2D normalTextureA;
+  uniform sampler2D normalTextureB;
+  uniform sampler2D foamTexture;
+  uniform sampler2D wakeMaskTexture;
+
+  void addDynamicWake (
+    vec4 wakeData,
+    float wakeIntensityValue,
+    vec2 worldXZ,
+    inout float wakeFoam,
+    inout vec2 wakeNormal
+  ) {
+    float intensity = clamp(wakeIntensityValue, 0.0, 1.0);
+    if (intensity <= 0.0001) return;
+
+    vec2 direction = normalize(wakeData.zw + vec2(0.0001, 0.0));
+    vec2 delta = worldXZ - wakeData.xy;
+    float behind = dot(delta, -direction);
+    float lengthValue = max(0.01, dynamicWakeLength);
+    float widthValue = max(0.01, dynamicWakeWidth);
+    float normalizedBehind = clamp(behind / lengthValue, 0.0, 1.0);
+    float lateral = dot(delta, vec2(-direction.y, direction.x));
+
+    float headFade = smoothstep(0.0, lengthValue * 0.08, behind);
+    float tailFade = 1.0 - smoothstep(0.65, 1.0, normalizedBehind);
+    float halfWidth = mix(widthValue * 0.25, widthValue, normalizedBehind);
+    float widthFade = 1.0 - smoothstep(halfWidth, halfWidth + widthValue * 0.25, abs(lateral));
+    float center = 1.0 - smoothstep(halfWidth * 0.16, halfWidth * 0.78, abs(lateral));
+    float envelope = headFade * tailFade * widthFade * intensity;
+
+    float phaseA = behind * dynamicWakeRippleScale - cc_time.x * 2.4;
+    float phaseB = (behind * 1.45 + abs(lateral) * 0.8) * dynamicWakeRippleScale - cc_time.x * 3.1;
+    float waveA = sin(phaseA);
+    float waveB = sin(phaseB) * (1.0 - center);
+    float side = sign(lateral);
+    vec2 backDirection = -direction;
+    vec2 perpendicular = vec2(-direction.y, direction.x);
+
+    wakeNormal += (
+      backDirection * (waveA * (0.45 + center * 0.75))
+      - perpendicular * side * (0.35 + waveB * 0.3) * (1.0 - center)
+    ) * envelope * dynamicWakeNormalStrength;
+
+    float crestThreshold = clamp(dynamicWakeCrestFoamThreshold, 0.0, 0.98);
+    float crestA = smoothstep(crestThreshold, min(1.0, crestThreshold + 0.16), waveA * 0.5 + 0.5);
+    float crestB = smoothstep(crestThreshold, min(1.0, crestThreshold + 0.16), waveB * 0.5 + 0.5);
+    float bow = (1.0 - smoothstep(0.0, lengthValue * 0.14, behind)) * headFade * center * 0.45;
+    wakeFoam = max(wakeFoam, max((crestA * (0.55 + center * 0.45) + crestB * 0.35) * envelope, bow * intensity));
   }
-}%
 
-CCProgram standard-vs %{
-  precision highp float;
+  vec4 frag () {
+    vec2 surfaceUV = v_uv + v_position.xz * 0.1;
+    vec2 uvA = surfaceUV * normalScaleA
+      + vec2(cc_time.x * normalSpeedA, cc_time.x * normalSpeedA * 0.61);
+    vec2 uvB = surfaceUV * normalScaleB
+      + vec2(-cc_time.x * normalSpeedB * 0.53, cc_time.x * normalSpeedB);
+    vec2 normalA = texture(normalTextureA, uvA).rg * 2.0 - 1.0;
+    vec2 normalB = texture(normalTextureB, uvB).rg * 2.0 - 1.0;
+    vec2 animatedNormal = (normalA + normalB) * 0.5 * normalStrength * waveVisualAmount;
 
-  // 1. surface internal macros, for technique usage or remapping some user (material) macros to surface internal macros
-  #include <macro-remapping>
-  #include <surfaces/effect-macros/common-macros>
+    float dynamicWakeFoam = 0.0;
+    vec2 dynamicWakeNormal = vec2(0.0);
+    addDynamicWake(dynamicWakeData0, dynamicWakeIntensities.x, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    addDynamicWake(dynamicWakeData1, dynamicWakeIntensities.y, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    addDynamicWake(dynamicWakeData2, dynamicWakeIntensities.z, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    addDynamicWake(dynamicWakeData3, dynamicWakeIntensities.w, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    addDynamicWake(dynamicWakeData4, dynamicWakeIntensity4, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    animatedNormal += dynamicWakeNormal * waveVisualAmount;
 
-  // 2. common include with corresponding shader stage, include before surface functions
-  #include <surfaces/includes/common-vs>
+    vec3 N = normalize(v_normal + vec3(animatedNormal.x, 0.0, animatedNormal.y));
+    vec3 V = normalize(v_position - cc_cameraPos.xyz);
+    vec3 R = reflect(V, N);
+    R.xz += animatedNormal * reflectionDistortion;
+    vec4 reflectColor = texture(reflectTexture, normalize(R));
+    float fresnel = pow(clamp(1.0 - dot(N, -V), 0.0, 1.0), max(0.001, fresnelPow));
 
-  // 3. user surface functions that can use user (effect) parameters (ubo Constants)
-  //    see surfaces/default-functions/xxx.chunk
-  #include <shared-ubos>
-  #include <surface-vertex>
+    vec4 col = mainColor * texture(mainTexture, v_uv);
+    vec3 tint = mix(shallowColor.rgb, deepColor.rgb, clamp(v_uv.y, 0.0, 1.0));
+    col.rgb = mix(col.rgb, tint, depthTintStrength);
+    col.rgb = mix(col.rgb, reflectColor.rgb, clamp(fReflect * fresnel * fresnelIntensity, 0.0, 1.0));
+    col.rgb *= 1.0 - clamp(shadowReceiverStrength, 0.0, 1.0) * 0.18;
 
-  // 4. surface include with corresponding shader stage and shading-model (optional)
-  #include <surfaces/includes/standard-vs>
+    vec2 foamUV = surfaceUV * foamScale
+      + vec2(cc_time.x * foamSpeed, -cc_time.x * foamSpeed * 0.37);
+    float foamNoise = mix(
+      texture(noiseTexture, foamUV + animatedNormal * 0.12).r,
+      texture(foamTexture, foamUV).r,
+      0.5
+    );
+    float foam = smoothstep(foamThresholdLow, max(foamThresholdHigh, foamThresholdLow + 0.0001), foamNoise)
+      * foamIntensity;
+    float edgeDistance = min(min(v_uv.x, 1.0 - v_uv.x), min(v_uv.y, 1.0 - v_uv.y));
+    float edgeBand = 1.0 - smoothstep(0.0, max(0.001, edgeFoamWidth), edgeDistance);
+    float edgeBreakup = mix(1.0, smoothstep(0.2, 0.8, foamNoise), clamp(edgeFoamNoiseAmount, 0.0, 1.0));
+    float dynamicWakeFoamBreakup = mix(0.35, 1.0, smoothstep(0.28, 0.8, foamNoise));
+    foam = clamp(
+      foam
+        + texture(wakeMaskTexture, v_uv * wakeScale).r * wakeIntensity
+        + edgeBand * edgeBreakup * edgeFoamIntensity
+        + dynamicWakeFoam * dynamicWakeFoamIntensity * dynamicWakeFoamBreakup,
+      0.0,
+      1.0
+    );
+    col.rgb = mix(col.rgb, foamColor.rgb, foam * foamColor.a);
 
-  // 5. shader entry with corresponding shader stage and technique usage/type
-  #include <shading-entries/main-functions/render-to-scene/vs>
-}%
+    vec2 D = v_uv - vec2(0.5, 0.5);
+    col.rgb = mix(col.rgb, rimColor.rgb, rimColor.a * smoothstep(0.0, 0.3, dot(D, D)));
+    col.a *= waterAlpha;
 
-
-CCProgram shadow-caster-vs %{
-  precision highp float;
-  #include <macro-remapping>
-  #include <surfaces/effect-macros/render-to-shadowmap>
-  #include <surfaces/includes/common-vs>
-  #include <shared-ubos>
-  #include <surface-vertex>
-  #include <shading-entries/main-functions/render-to-shadowmap/vs>
-}%
-
-
-
-CCProgram standard-fs %{
-  // shading-model : standard
-  // lighting-model : standard (isotropy / anisotropy pbr)
-  // shader stage : fs
-  // technique usage/type : render-to-scene
-
-  precision highp float;
-  // 1. surface internal macros, for technique usage or remapping some user (material) macros to surface internal macros
-  #include <macro-remapping>
-  #include <surfaces/effect-macros/common-macros>
-
-  // 2. common include with corresponding shader stage, include before surface functions
-  #include <surfaces/includes/common-fs>
-
-  // 3. user surface functions that can use user (effect) parameters (ubo Constants)
-  //    see surfaces/default-functions/xxx.chunk
-  #include <shared-ubos>
-  #include <surface-fragment>
-
-  // 4. lighting-model (optional)
-  #include <lighting-models/includes/standard>
-
-  // 5. surface include with corresponding shader stage and shading-model (optional)
-  #include <surfaces/includes/standard-fs>
-
-  // 6. shader entry with corresponding shader stage and technique usage/type
-  #include <shading-entries/main-functions/render-to-scene/fs>
-}%
-
-CCProgram shadow-caster-fs %{
-  precision highp float;
-  #include <macro-remapping>
-  #include <surfaces/effect-macros/render-to-shadowmap>
-  #include <surfaces/includes/common-fs>
-  #include <shared-ubos>
-  #include <surface-fragment>
-  #include <shading-entries/main-functions/render-to-shadowmap/fs>
-}%
-
-
-CCProgram reflect-map-fs %{
-  precision highp float;
-  #include <macro-remapping>
-  #include <surfaces/effect-macros/common-macros>
-  #include <surfaces/includes/common-fs>
-  #include <shared-ubos>
-  #include <surface-fragment>
-  #include <lighting-models/includes/standard>
-  #include <surfaces/includes/standard-fs>
-  #include <shading-entries/main-functions/render-to-reflectmap/fs>
+    CC_APPLY_FOG(col, v_position);
+    return CCFragOutput(col);
+  }
 }%
