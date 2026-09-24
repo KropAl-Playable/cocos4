@@ -14,6 +14,8 @@ export interface IWaterWave {
     wavelength: number;
     speed: number;
     steepness: number;
+    /** 0..1 bounded second-harmonic crest sharpening. */
+    crestSharpness: number;
     phase: number;
 }
 
@@ -42,7 +44,11 @@ export function createWaterSample(): IWaterSample {
  *
  * theta = k * (dot(D, xz) - speed * time) + phase
  * horizontal = Q * A * D * cos(theta)
- * vertical = A * sin(theta)
+ * vertical = A * sin(theta) - B * cos(2 * theta)
+ * B = A * min(0.35, 0.5 * k * abs(A) * crestSharpness)
+ *
+ * The bounded second harmonic raises/narrows crests and softens troughs without
+ * allowing the shaping term to dominate the base wave.
  *
  * Direction is normalized before evaluation. Wavelength is clamped away from
  * zero. Steepness is expected in [0, 1], but is clamped defensively.
@@ -86,28 +92,35 @@ export function sampleGerstnerWaves(
         const k = TWO_PI / wavelength;
         const amplitude = wave.amplitude;
         const q = Math.max(0, Math.min(1, wave.steepness));
+        const crestSharpness = Math.max(0, Math.min(1, wave.crestSharpness));
         const theta = k * (dx * x + dz * z - wave.speed * time) + wave.phase;
         const sinTheta = Math.sin(theta);
         const cosTheta = Math.cos(theta);
+        const sin2Theta = Math.sin(theta * 2);
+        const cos2Theta = Math.cos(theta * 2);
         const qa = q * amplitude;
         const ak = amplitude * k;
         const qakSin = q * ak * sinTheta;
+        const shapeRatio = Math.min(0.35, 0.5 * k * Math.abs(amplitude) * crestSharpness);
+        const shapeAmplitude = amplitude * shapeRatio;
+        const verticalSlope = ak * cosTheta + 2 * shapeAmplitude * k * sin2Theta;
 
         px += qa * dx * cosTheta;
-        py += amplitude * sinTheta;
+        py += amplitude * sinTheta - shapeAmplitude * cos2Theta;
         pz += qa * dz * cosTheta;
 
         dPdxX -= qakSin * dx * dx;
-        dPdxY += ak * dx * cosTheta;
+        dPdxY += verticalSlope * dx;
         dPdxZ -= qakSin * dx * dz;
 
         dPdzX -= qakSin * dx * dz;
-        dPdzY += ak * dz * cosTheta;
+        dPdzY += verticalSlope * dz;
         dPdzZ -= qakSin * dz * dz;
 
         const angularSpeed = k * wave.speed;
         velocityX += qa * dx * angularSpeed * sinTheta;
-        velocityY -= amplitude * angularSpeed * cosTheta;
+        velocityY -= amplitude * angularSpeed * cosTheta
+            - 2 * shapeAmplitude * angularSpeed * sin2Theta;
         velocityZ += qa * dz * angularSpeed * sinTheta;
     }
 
