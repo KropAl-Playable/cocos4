@@ -25,5 +25,6 @@
 
 export { MeshRenderer } from './mesh-renderer';
 export { CageDeformer } from './cage-deformer';
+export { WaterSurface, WaterWave } from './water-surface';
 /** deprecated */
 export * from './deprecated';
