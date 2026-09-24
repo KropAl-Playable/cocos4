@@ -3,8 +3,8 @@
 */
 
 import { EDITOR } from 'internal:constants';
-import { Mat4, Vec2, Vec3, Vec4, _decorator, CCFloat, CCInteger, cclegacy } from '../../core';
-import { Component } from '../../scene-graph';
+import { Color, Mat4, Vec2, Vec3, Vec4, _decorator, CCFloat, CCInteger, cclegacy } from '../../core';
+import { Component, Node } from '../../scene-graph';
 import { MeshRenderer } from './mesh-renderer';
 import {
     createWaterSample,
@@ -63,6 +63,17 @@ const _localSample = createWaterSample();
 const _worldPosition = new Vec3();
 const _worldNormal = new Vec3();
 const _worldVelocity = new Vec3();
+const _probeInputLocal = new Vec3();
+const _probeInputWorld = new Vec3();
+const _probeNormalEnd = new Vec3();
+const _debugProbeSample: IWorldWaterSample = {
+    height: 0,
+    position: new Vec3(),
+    normal: new Vec3(0, 1, 0),
+    velocity: new Vec3(),
+};
+const DEBUG_PROBE_COLOR = new Color(255, 220, 0, 255);
+const DEBUG_NORMAL_COLOR = new Color(0, 255, 255, 255);
 
 export interface IWorldWaterSample {
     height: number;
@@ -106,6 +117,19 @@ export class WaterSurface extends Component {
     @property
     public previewInEditor = true;
 
+    @property({ type: Node })
+    public debugProbe: Node | null = null;
+
+    @property
+    public debugProbeLocalXZ = new Vec2(0, 0);
+
+    @property
+    public debugDrawProbe = false;
+
+    @property({ type: CCFloat })
+    @range([0.01, 5, 0.01])
+    public debugNormalLength = 0.5;
+
     private _renderer: MeshRenderer | null = null;
     private _time = 0;
     private _materialInstances: ReturnType<MeshRenderer['getMaterialInstance']>[] = [];
@@ -134,10 +158,12 @@ export class WaterSurface extends Component {
     protected update(dt: number): void {
         if (EDITOR && !this.previewInEditor) {
             this._uploadWaves();
+            this._updateDebugProbe();
             return;
         }
         this._time += Math.max(0, Math.min(dt, 0.1)) * this.timeScale;
         this._uploadWaves();
+        this._updateDebugProbe();
     }
 
     public resetTime(time = 0): void {
@@ -174,6 +200,44 @@ export class WaterSurface extends Component {
         result.normal.set(_worldNormal);
         result.velocity.set(_worldVelocity);
         return result;
+    }
+
+    private _updateDebugProbe(): void {
+        if (!this.debugProbe && !this.debugDrawProbe) return;
+
+        // Keep the parameter-space XZ fixed. Using the marker's displaced XZ as
+        // the next input would introduce artificial drift with Gerstner waves.
+        _probeInputLocal.set(this.debugProbeLocalXZ.x, 0, this.debugProbeLocalXZ.y);
+        Vec3.transformMat4(_probeInputWorld, _probeInputLocal, this.node.worldMatrix);
+        this.sampleWater(_probeInputWorld, _debugProbeSample);
+
+        if (this.debugProbe) {
+            this.debugProbe.setWorldPosition(_debugProbeSample.position);
+        }
+
+        if (!this.debugDrawProbe) return;
+        Vec3.scaleAndAdd(
+            _probeNormalEnd,
+            _debugProbeSample.position,
+            _debugProbeSample.normal,
+            this.debugNormalLength,
+        );
+
+        const root = cclegacy.director.root as any;
+        const cameras = root?.cameraList as any[] | undefined;
+        if (!cameras?.length) return;
+        for (const camera of cameras) {
+            camera.initGeometryRenderer?.();
+            const geometryRenderer = camera.geometryRenderer;
+            if (!geometryRenderer) continue;
+            geometryRenderer.addCross(_debugProbeSample.position, 0.08, DEBUG_PROBE_COLOR, true);
+            geometryRenderer.addLine(
+                _debugProbeSample.position,
+                _probeNormalEnd,
+                DEBUG_NORMAL_COLOR,
+                true,
+            );
+        }
     }
 
     private _collectMaterials(): void {
