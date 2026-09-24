@@ -22,6 +22,7 @@ describe('Water waves', () => {
             wavelength: Math.PI * 2,
             speed: 1,
             steepness: 0.4,
+            crestSharpness: 0,
             phase: 0,
         };
 
@@ -42,6 +43,7 @@ describe('Water waves', () => {
                 wavelength: 4,
                 speed: 0,
                 steepness: 0,
+                crestSharpness: 0,
                 phase: Math.PI / 2,
             },
             {
@@ -50,12 +52,35 @@ describe('Water waves', () => {
                 wavelength: 2,
                 speed: 0,
                 steepness: 0,
+                crestSharpness: 0,
                 phase: Math.PI / 2,
             },
         ];
 
         sampleGerstnerWaves(0, 0, 0, waves, sample, 1);
         expect(sample.height).toBeCloseTo(0.25, 6);
+    });
+
+    test('crest sharpening raises the crest and softens the trough symmetrically in phase', () => {
+        const crest = createWaterSample();
+        const trough = createWaterSample();
+        const wave = {
+            direction: new Vec2(1, 0),
+            amplitude: 0.5,
+            wavelength: Math.PI * 2,
+            speed: 0,
+            steepness: 0.35,
+            crestSharpness: 1,
+            phase: 0,
+        };
+
+        sampleGerstnerWaves(Math.PI / 2, 0, 0, [wave], crest);
+        sampleGerstnerWaves(Math.PI * 1.5, 0, 0, [wave], trough);
+
+        expect(crest.height).toBeGreaterThan(0.5);
+        expect(trough.height).toBeGreaterThan(-0.5);
+        expect(crest.normal.y).toBeGreaterThan(0);
+        expect(trough.normal.y).toBeGreaterThan(0);
     });
 
     test('surface velocity follows the same phase and travel-speed convention', () => {
@@ -66,6 +91,7 @@ describe('Water waves', () => {
             wavelength: Math.PI * 2,
             speed: 2,
             steepness: 0,
+            crestSharpness: 0,
             phase: 0,
         };
 
