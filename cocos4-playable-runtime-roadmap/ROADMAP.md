@@ -11,7 +11,7 @@ The roadmap favors systems that move expensive work offline, reuse compact mesh 
 | Priority | System | Status | Next gate |
 |---:|---|---|---|
 | 1 | **AO / lighting baker** | ✅ v0.1 working | Vertex AO integration across custom materials + production validation |
-| 2 | **Cage deformation** | 🟡 v0.1 nearly ready | finish authoring/bake flow, debug tooling, Vertex AO compatibility |
+| 2 | **Cage deformation** | ✅ v0.1 functional complete | regression/mobile benchmark tail |
 | 3 | **Advanced water + buoyancy** | ⏭ next | shared visual/CPU wave model |
 | 4 | **Havok backend** | planned | playable-size/runtime feasibility |
 | 5 | **GPU particles** | planned | scalable particle simulation + fallback |
@@ -69,7 +69,7 @@ Implemented direction:
 
 ## Status
 
-**Cage Deform v0.1 is functional but not finished.**
+**Cage Deform v0.1 functional scope is complete.**
 
 Implemented direction:
 
@@ -85,15 +85,16 @@ Implemented direction:
 - isolated cage standard shader;
 - fixed-step control simulation.
 
-## Remaining work before v0.1 is complete
+## Validation tail
 
-1. make the cage shader support the same Vertex AO contract as the AO pipeline;
-2. finish reliable debug visualization;
-3. add persistent editor/offline influence baking;
-4. add basic control authoring/editing;
-5. add influence heatmap/debug view;
-6. benchmark repeated instances and impulse-heavy cases;
-7. validate WebGL/mobile behavior.
+Implementation and authoring requirements for v0.1 are complete: isolated cage shader, Vertex AO compatibility, persistent offline baking, component-integrated bake controls, baked/runtime diagnostics, and influence heatmap are in place.
+
+Keep the following as regression/benchmark work while Task 003 proceeds:
+
+1. final Debug Draw smoke test;
+2. final `addImpulse()` smoke test on baked assets;
+3. repeated-instance and impulse-heavy benchmark;
+4. WebGL/mobile validation.
 
 ## Decision gate
 
