@@ -55,12 +55,14 @@ COLOR.b = material/random variation
 COLOR.a = reserved/general mask
 ~~~
 
-Cage currently needs dedicated compact influence attributes:
+Cage v0.1 reuses standard static-mesh glTF semantics for compact persistent influences:
 
 ~~~text
-a_cageIndices : RGBA8
-a_cageWeights : RGBA8
+JOINTS_0  : RGBA8UI   // cage control indices
+WEIGHTS_0 : RGBA8     // normalized cage weights
 ~~~
+
+This keeps the payload at 8 bytes/vertex and round-trips through Creator 3.8.8. The source mesh must be static and must not already use skinning data.
 
 Do not globally reserve all channels yet. Materials must explicitly declare the packed-data contract they consume.
 
