@@ -3,7 +3,7 @@
 */
 
 import { EDITOR } from 'internal:constants';
-import { Color, Mat4, Vec2, Vec3, Vec4, _decorator, CCFloat, CCInteger, cclegacy } from '../../core';
+import { Color, Vec2, Vec3, Vec4, _decorator, CCFloat, CCInteger, cclegacy } from '../../core';
 import { Component, Node } from '../../scene-graph';
 import { MeshRenderer } from './mesh-renderer';
 import {
@@ -69,8 +69,6 @@ function createWaterWave(
     return wave;
 }
 
-const _inverseWorld = new Mat4();
-const _localPoint = new Vec3();
 const _localSample = createWaterSample();
 const _worldPosition = new Vec3();
 const _worldNormal = new Vec3();
