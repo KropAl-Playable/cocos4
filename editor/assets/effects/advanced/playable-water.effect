@@ -251,20 +251,20 @@ CCProgram playable-water-vs %{
     StandardVertInput In;
     CCVertInput(In);
 
-    vec3 displaced;
-    vec3 localWaveNormal;
-    float localWaveCrest;
-    evaluatePlayableWater(In.position.xyz, displaced, localWaveNormal, localWaveCrest);
-    In.position.xyz = displaced;
-    In.normal = localWaveNormal;
-
     mat4 matWorld, matWorldIT;
     CCGetWorldMatrixFull(matWorld, matWorldIT);
 
-    vec4 pos = matWorld * In.position;
+    // Evaluate the analytical surface in WORLD space. Adjacent translated
+    // tiles therefore sample the same phase field and join without wave seams.
+    vec4 baseWorld = matWorld * In.position;
+    vec3 displacedWorld;
+    vec3 worldWaveNormal;
+    float localWaveCrest;
+    evaluatePlayableWater(baseWorld.xyz, displacedWorld, worldWaveNormal, localWaveCrest);
+    vec4 pos = vec4(displacedWorld, 1.0);
 
     v_position = pos.xyz;
-    v_normal = normalize((matWorldIT * vec4(In.normal, 0.0)).xyz);
+    v_normal = worldWaveNormal;
     v_tangent = normalize((matWorld * vec4(In.tangent.xyz, 0.0)).xyz);
     v_bitangent = cross(v_normal, v_tangent) * In.tangent.w;
 
@@ -277,11 +277,7 @@ CCProgram playable-water-vs %{
 
     CC_TRANSFER_FOG(pos);
     CC_TRANSFER_SHADOW(pos);
-    #if CC_USE_2D
-      return cc_matProj * cc_matView * In.position;
-    #else
-      return cc_matProj * (cc_matView * matWorld) * In.position;
-    #endif
+    return cc_matProj * cc_matView * pos;
   }
 }%
 
