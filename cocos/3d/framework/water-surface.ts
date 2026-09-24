@@ -14,7 +14,7 @@ import {
     sampleGerstnerWaves,
 } from '../misc/water-wave';
 
-const { ccclass, executeInEditMode, menu, property, requireComponent, range } = _decorator;
+const { ccclass, executeInEditMode, menu, property, range } = _decorator;
 
 @ccclass('cc.WaterWave')
 export class WaterWave implements IWaterWave {
@@ -44,23 +44,29 @@ export class WaterWave implements IWaterWave {
     @property({ type: CCFloat })
     public phase = 0;
 
-    constructor(
-        direction = new Vec2(1, 0),
-        amplitude = 0.15,
-        wavelength = 4,
-        speed = 1,
-        steepness = 0.35,
-        phase = 0,
-        crestSharpness = 0.25,
-    ) {
-        this.direction.set(direction);
-        this.amplitude = amplitude;
-        this.wavelength = wavelength;
-        this.speed = speed;
-        this.steepness = steepness;
-        this.phase = phase;
-        this.crestSharpness = crestSharpness;
-    }
+}
+
+function createWaterWave(
+    direction: Readonly<Vec2>,
+    amplitude: number,
+    wavelength: number,
+    speed: number,
+    steepness: number,
+    phase: number,
+    crestSharpness = 0.25,
+): WaterWave {
+    // Keep WaterWave itself constructor-free. Creator's scene deserializer is
+    // most reliable for nested serializable classes when it can instantiate
+    // them with the engine default constructor in both Editor and browser builds.
+    const wave = new WaterWave();
+    wave.direction.set(direction);
+    wave.amplitude = amplitude;
+    wave.wavelength = wavelength;
+    wave.speed = speed;
+    wave.steepness = steepness;
+    wave.phase = phase;
+    wave.crestSharpness = crestSharpness;
+    return wave;
 }
 
 const _inverseWorld = new Mat4();
@@ -99,23 +105,22 @@ export interface IWorldWaterSample {
 @ccclass('cc.WaterSurface')
 @menu('Mesh/WaterSurface')
 @executeInEditMode
-@requireComponent(MeshRenderer)
 export class WaterSurface extends Component {
     @property({ type: CCInteger })
     @range([1, MAX_WATER_WAVES, 1])
     public waveCount = 3;
 
     @property({ type: WaterWave })
-    public wave0 = new WaterWave(new Vec2(1, 0.15), 0.18, 4.5, 1.0, 0.35, 0);
+    public wave0 = createWaterWave(new Vec2(1, 0.15), 0.18, 4.5, 1.0, 0.35, 0);
 
     @property({ type: WaterWave })
-    public wave1 = new WaterWave(new Vec2(-0.45, 1), 0.10, 2.8, 0.72, 0.28, 1.7);
+    public wave1 = createWaterWave(new Vec2(-0.45, 1), 0.10, 2.8, 0.72, 0.28, 1.7);
 
     @property({ type: WaterWave })
-    public wave2 = new WaterWave(new Vec2(0.7, 0.55), 0.055, 1.6, 0.48, 0.20, 3.4);
+    public wave2 = createWaterWave(new Vec2(0.7, 0.55), 0.055, 1.6, 0.48, 0.20, 3.4);
 
     @property({ type: WaterWave })
-    public wave3 = new WaterWave(new Vec2(-0.8, -0.3), 0.035, 0.95, 0.34, 0.16, 5.1);
+    public wave3 = createWaterWave(new Vec2(-0.8, -0.3), 0.035, 0.95, 0.34, 0.16, 5.1);
 
     @property({ type: CCFloat })
     @range([0, 4, 0.01])
@@ -123,6 +128,9 @@ export class WaterSurface extends Component {
 
     @property
     public previewInEditor = true;
+
+    @property
+    public includeChildRenderers = true;
 
     @property({ type: Node })
     public debugProbe: Node | null = null;
@@ -137,7 +145,7 @@ export class WaterSurface extends Component {
     @range([0.01, 5, 0.01])
     public debugNormalLength = 0.5;
 
-    private _renderer: MeshRenderer | null = null;
+    private _renderers: MeshRenderer[] = [];
     private _time = 0;
     private _materialInstances: ReturnType<MeshRenderer['getMaterialInstance']>[] = [];
     private _waveDirAmp: Vec4[] = [new Vec4(), new Vec4(), new Vec4(), new Vec4()];
@@ -159,7 +167,7 @@ export class WaterSurface extends Component {
     }
 
     protected onEnable(): void {
-        this._renderer = this.getComponent(MeshRenderer);
+        this._collectRenderers();
         this._collectMaterials();
         this._uploadWaves();
     }
@@ -251,18 +259,14 @@ export class WaterSurface extends Component {
             velocity: new Vec3(),
         };
 
-        Mat4.invert(_inverseWorld, this.node.worldMatrix);
-        Vec3.transformMat4(_localPoint, worldPosition, _inverseWorld);
-
         const count = Math.max(1, Math.min(MAX_WATER_WAVES, Math.floor(this.waveCount)));
         const waves = this.waves;
 
-        // World-space gameplay queries address the visible XZ location, while
-        // Gerstner waves are parameterized by their undeformed XZ coordinates.
-        // A few fixed-point iterations invert the small horizontal displacement
-        // without any mesh query or allocation.
-        const targetX = _localPoint.x;
-        const targetZ = _localPoint.z;
+        // Waves are parameterized in world XZ so multiple translated tiles share
+        // one continuous analytical surface. Invert the horizontal Gerstner
+        // displacement to answer a query at the visible world-space XZ.
+        const targetX = worldPosition.x;
+        const targetZ = worldPosition.z;
         let queryX = targetX;
         let queryZ = targetZ;
         for (let i = 0; i < 3; ++i) {
@@ -272,10 +276,10 @@ export class WaterSurface extends Component {
         }
         sampleGerstnerWaves(queryX, queryZ, this._time, waves, _localSample, count);
 
-        Vec3.transformMat4(_worldPosition, _localSample.position, this.node.worldMatrix);
-        Vec3.transformMat4Normal(_worldNormal, _localSample.normal, this.node.worldMatrix);
-        Vec3.normalize(_worldNormal, _worldNormal);
-        Vec3.transformMat4Normal(_worldVelocity, _localSample.velocity, this.node.worldMatrix);
+        const baseY = this.node.worldPosition.y;
+        _worldPosition.set(_localSample.position.x, baseY + _localSample.position.y, _localSample.position.z);
+        _worldNormal.set(_localSample.normal);
+        _worldVelocity.set(_localSample.velocity);
 
         result.height = _worldPosition.y;
         result.position.set(_worldPosition);
@@ -289,8 +293,11 @@ export class WaterSurface extends Component {
 
         // Keep the parameter-space XZ fixed. Using the marker's displaced XZ as
         // the next input would introduce artificial drift with Gerstner waves.
-        _probeInputLocal.set(this.debugProbeLocalXZ.x, 0, this.debugProbeLocalXZ.y);
-        Vec3.transformMat4(_probeInputWorld, _probeInputLocal, this.node.worldMatrix);
+        _probeInputWorld.set(
+            this.node.worldPosition.x + this.debugProbeLocalXZ.x,
+            this.node.worldPosition.y,
+            this.node.worldPosition.z + this.debugProbeLocalXZ.y,
+        );
         this.sampleWater(_probeInputWorld, _debugProbeSample);
 
         if (this.debugProbe) {
@@ -322,26 +329,39 @@ export class WaterSurface extends Component {
         }
     }
 
+    private _collectRenderers(): void {
+        this._renderers.length = 0;
+        if (this.includeChildRenderers) {
+            const renderers = this.getComponentsInChildren(MeshRenderer);
+            for (const renderer of renderers) {
+                if (renderer && renderer.isValid) this._renderers.push(renderer);
+            }
+        } else {
+            const renderer = this.getComponent(MeshRenderer);
+            if (renderer) this._renderers.push(renderer);
+        }
+    }
+
     private _collectMaterials(): void {
         this._materialInstances.length = 0;
-        if (!this._renderer) return;
+        this._collectRenderers();
 
-        for (let i = 0; i < this._renderer.sharedMaterials.length; ++i) {
-            const material = this._renderer.getMaterialInstance(i);
-            if (!material || !material.isValid) continue;
+        for (const renderer of this._renderers) {
+            for (let i = 0; i < renderer.sharedMaterials.length; ++i) {
+                const material = renderer.getMaterialInstance(i);
+                if (!material || !material.isValid) continue;
 
-            // Do not depend on EffectAsset.name here. Editor material refreshes
-            // can replace the material instance/effect object while keeping the
-            // same renderer slot. The uniform contract is the reliable test.
-            let supportsWater = false;
-            for (const pass of material.passes) {
-                if (pass.getHandle('waterWaveTime')) {
-                    supportsWater = true;
-                    break;
+                let supportsWater = false;
+                for (const pass of material.passes) {
+                    if (pass.getHandle('waterWaveTime')) {
+                        supportsWater = true;
+                        break;
+                    }
                 }
+                if (!supportsWater) continue;
+                if (this._materialInstances.includes(material)) continue;
+                this._materialInstances.push(material);
             }
-            if (!supportsWater) continue;
-            this._materialInstances.push(material);
         }
 
         // A newly-created material instance starts from effect defaults. Reapply
@@ -351,8 +371,6 @@ export class WaterSurface extends Component {
     }
 
     private _uploadWaves(): void {
-        if (!this._renderer) return;
-
         // Creator may recreate MaterialInstance objects after editing/reimporting
         // a material. Cached instances then keep receiving uniforms while the
         // renderer uses a fresh instance, which looks like a frozen/default wave.
