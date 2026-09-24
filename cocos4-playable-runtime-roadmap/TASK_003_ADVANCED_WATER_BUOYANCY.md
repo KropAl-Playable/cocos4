@@ -16,11 +16,14 @@ Initial Task 003 foundation is now implemented on `feat/advanced-water-buoyancy`
 - ✅ analytical GPU vertex displacement and large-wave normal reconstruction using the same equations;
 - ✅ WebGL-friendly fixed four-wave uniform layout;
 - ✅ zero per-vertex CPU work and no allocation in the steady-state CPU sampling path;
-- ✅ first unit-test coverage for the shared wave convention.
+- ✅ first unit-test coverage for the shared wave convention;
+- ✅ bounded Stokes-like crest sharpening shared by CPU and GPU;
+- ✅ analytical crest-foam signal based on wave phase/energy/steepness with noise breakup.
 
 Next gates:
 
-- ⏳ local Creator 3.8.8 compile/render validation of `playable-water.effect`;
+- ✅ local Creator 3.8.8 compile/render validation of `playable-water.effect`;
+- ⏳ local validation/tuning of crest sharpening and crest foam;
 - ⏳ CPU-vs-GPU surface agreement marker/debug visualization;
 - ⏳ 4-point `WaterBuoyancy` prototype;
 - ⏳ bounded wake/ripple sources and quality tiers.
