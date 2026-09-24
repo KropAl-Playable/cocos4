@@ -73,6 +73,7 @@ CCEffect %{
 
         waterPadding0:              { value: 0.0, editor: { visible: false } }
         waterPadding1:              { value: 0.0, editor: { visible: false } }
+        waterPadding2:              { value: 0.0, editor: { visible: false } }
 
   - name: transparent
     passes:
@@ -148,6 +149,7 @@ CCProgram water-constants %{
     float dynamicWakeCrestFoamThreshold;
     float waterPadding0;
     float waterPadding1;
+    float waterPadding2;
   };
 }%
 
