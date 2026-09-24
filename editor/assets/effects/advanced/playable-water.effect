@@ -32,6 +32,9 @@ CCEffect %{
         foamIntensity:        { value: 0.25, editor: { slide: true, range: [0, 1], step: 0.01 } }
         foamThresholdLow:     { value: 0.58 }
         foamThresholdHigh:    { value: 0.78 }
+        crestFoamIntensity:   { value: 0.65, editor: { slide: true, range: [0, 2], step: 0.01 } }
+        crestFoamThreshold:   { value: 0.42, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        crestFoamNoiseAmount: { value: 0.55, editor: { slide: true, range: [0, 1], step: 0.01 } }
         wakeIntensity:        { value: 0.0, editor: { slide: true, range: [0, 1], step: 0.01 } }
         wakeScale:            { value: 1.0 }
         waveVisualAmount:     { value: 1.0, editor: { slide: true, range: [0, 1], step: 0.01 } }
@@ -65,6 +68,7 @@ CCEffect %{
         waterWaveParams1:           { value: [2.8, 0.72, 1.7, 1.0], editor: { visible: false } }
         waterWaveParams2:           { value: [1.6, 0.48, 3.4, 1.0], editor: { visible: false } }
         waterWaveParams3:           { value: [0.95, 0.34, 5.1, 0.0], editor: { visible: false } }
+        waterWaveShape:             { value: [0.25, 0.25, 0.25, 0.25], editor: { visible: false } }
         waterWaveTime:              { value: [0.0, 3.0, 0.0, 0.0], editor: { visible: false } }
 
         waterPadding0:              { value: 0.0, editor: { visible: false } }
@@ -106,6 +110,7 @@ CCProgram water-constants %{
     vec4 waterWaveParams1;
     vec4 waterWaveParams2;
     vec4 waterWaveParams3;
+    vec4 waterWaveShape;
     vec4 waterWaveTime;
 
     float fReflect;
@@ -121,6 +126,9 @@ CCProgram water-constants %{
     float foamIntensity;
     float foamThresholdLow;
     float foamThresholdHigh;
+    float crestFoamIntensity;
+    float crestFoamThreshold;
+    float crestFoamNoiseAmount;
     float wakeIntensity;
     float wakeScale;
     float waveVisualAmount;
@@ -164,6 +172,7 @@ CCProgram playable-water-vs %{
   out vec2 v_uv;
   out vec2 v_uv1;
   out vec4 v_color;
+  out float v_waveCrest;
 
   const float WATER_TWO_PI = 6.28318530718;
 
@@ -171,9 +180,11 @@ CCProgram playable-water-vs %{
     vec2 xz,
     vec4 dirAmp,
     vec4 params,
+    float crestSharpness,
     inout vec3 displaced,
     inout vec3 dPdx,
-    inout vec3 dPdz
+    inout vec3 dPdz,
+    inout float crestSignal
   ) {
     if (params.w < 0.5 || abs(dirAmp.z) < 0.000001) return;
 
@@ -194,28 +205,42 @@ CCProgram playable-water-vs %{
     float ak = amplitude * k;
     float qakSin = steepness * ak * s;
 
+    float sharpness = clamp(crestSharpness, 0.0, 1.0);
+    float shapeRatio = min(0.35, 0.5 * k * abs(amplitude) * sharpness);
+    float shapeAmplitude = amplitude * shapeRatio;
+    float sin2Theta = sin(theta * 2.0);
+    float cos2Theta = cos(theta * 2.0);
+    float verticalSlope = ak * c + 2.0 * shapeAmplitude * k * sin2Theta;
+
     displaced.x += qa * direction.x * c;
-    displaced.y += amplitude * s;
+    displaced.y += amplitude * s - shapeAmplitude * cos2Theta;
     displaced.z += qa * direction.y * c;
 
     dPdx.x -= qakSin * direction.x * direction.x;
-    dPdx.y += ak * direction.x * c;
+    dPdx.y += verticalSlope * direction.x;
     dPdx.z -= qakSin * direction.x * direction.y;
 
     dPdz.x -= qakSin * direction.x * direction.y;
-    dPdz.y += ak * direction.y * c;
+    dPdz.y += verticalSlope * direction.y;
     dPdz.z -= qakSin * direction.y * direction.y;
+
+    // Foam source is intentionally visual-only. It favors high positive phase,
+    // physically energetic waves (k*A), steepness and crest sharpening.
+    float crest = smoothstep(0.35, 0.98, s * 0.5 + 0.5);
+    float energy = clamp(k * abs(amplitude) * (0.35 + 0.65 * steepness), 0.0, 1.0);
+    crestSignal = max(crestSignal, crest * energy * (0.65 + 0.35 * sharpness));
   }
 
-  void evaluatePlayableWater(vec3 position, out vec3 displaced, out vec3 normal) {
+  void evaluatePlayableWater(vec3 position, out vec3 displaced, out vec3 normal, out float crestSignal) {
     displaced = position;
     vec3 dPdx = vec3(1.0, 0.0, 0.0);
     vec3 dPdz = vec3(0.0, 0.0, 1.0);
+    crestSignal = 0.0;
 
-    accumulateWaterWave(position.xz, waterWaveDirAmp0, waterWaveParams0, displaced, dPdx, dPdz);
-    accumulateWaterWave(position.xz, waterWaveDirAmp1, waterWaveParams1, displaced, dPdx, dPdz);
-    accumulateWaterWave(position.xz, waterWaveDirAmp2, waterWaveParams2, displaced, dPdx, dPdz);
-    accumulateWaterWave(position.xz, waterWaveDirAmp3, waterWaveParams3, displaced, dPdx, dPdz);
+    accumulateWaterWave(position.xz, waterWaveDirAmp0, waterWaveParams0, waterWaveShape.x, displaced, dPdx, dPdz, crestSignal);
+    accumulateWaterWave(position.xz, waterWaveDirAmp1, waterWaveParams1, waterWaveShape.y, displaced, dPdx, dPdz, crestSignal);
+    accumulateWaterWave(position.xz, waterWaveDirAmp2, waterWaveParams2, waterWaveShape.z, displaced, dPdx, dPdz, crestSignal);
+    accumulateWaterWave(position.xz, waterWaveDirAmp3, waterWaveParams3, waterWaveShape.w, displaced, dPdx, dPdz, crestSignal);
 
     normal = normalize(cross(dPdz, dPdx));
   }
@@ -226,7 +251,8 @@ CCProgram playable-water-vs %{
 
     vec3 displaced;
     vec3 localWaveNormal;
-    evaluatePlayableWater(In.position.xyz, displaced, localWaveNormal);
+    float localWaveCrest;
+    evaluatePlayableWater(In.position.xyz, displaced, localWaveNormal, localWaveCrest);
     In.position.xyz = displaced;
     In.normal = localWaveNormal;
 
@@ -245,6 +271,7 @@ CCProgram playable-water-vs %{
       v_uv1 = a_texCoord1;
     #endif
     v_color = a_color;
+    v_waveCrest = localWaveCrest;
 
     CC_TRANSFER_FOG(pos);
     CC_TRANSFER_SHADOW(pos);
@@ -265,6 +292,7 @@ CCProgram unlit-fs %{
   in vec2 v_uv;
   in vec3 v_position;
   in vec3 v_normal;
+  in float v_waveCrest;
 
   uniform sampler2D mainTexture;
   uniform sampler2D noiseTexture;
@@ -364,8 +392,22 @@ CCProgram unlit-fs %{
     float edgeBand = 1.0 - smoothstep(0.0, max(0.001, edgeFoamWidth), edgeDistance);
     float edgeBreakup = mix(1.0, smoothstep(0.2, 0.8, foamNoise), clamp(edgeFoamNoiseAmount, 0.0, 1.0));
     float dynamicWakeFoamBreakup = mix(0.35, 1.0, smoothstep(0.28, 0.8, foamNoise));
+
+    float crestMask = smoothstep(
+      clamp(crestFoamThreshold, 0.0, 0.98),
+      min(1.0, clamp(crestFoamThreshold, 0.0, 0.98) + 0.22),
+      clamp(v_waveCrest, 0.0, 1.0)
+    );
+    float crestBreakup = mix(
+      1.0,
+      smoothstep(0.18, 0.88, foamNoise),
+      clamp(crestFoamNoiseAmount, 0.0, 1.0)
+    );
+    float analyticalCrestFoam = crestMask * crestBreakup * max(0.0, crestFoamIntensity);
+
     foam = clamp(
       foam
+        + analyticalCrestFoam
         + texture(wakeMaskTexture, v_uv * wakeScale).r * wakeIntensity
         + edgeBand * edgeBreakup * edgeFoamIntensity
         + dynamicWakeFoam * dynamicWakeFoamIntensity * dynamicWakeFoamBreakup,
