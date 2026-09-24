@@ -80,6 +80,7 @@ const _debugProbeSample: IWorldWaterSample = {
 };
 const DEBUG_PROBE_COLOR = new Color(255, 220, 0, 255);
 const DEBUG_NORMAL_COLOR = new Color(0, 255, 255, 255);
+const MAX_WATER_WAKE_SOURCES = 5;
 
 export interface IWorldWaterSample {
     height: number;
@@ -144,6 +145,11 @@ export class WaterSurface extends Component {
     private _waveShape = new Vec4();
     private _timeParams = new Vec4();
 
+    private _wakeData: Vec4[] = [new Vec4(), new Vec4(), new Vec4(), new Vec4(), new Vec4()];
+    private _wakeIntensities = new Vec4();
+    private _wakeIntensity4 = 0;
+    private _materialRefreshCounter = 0;
+
     public get time(): number {
         return this._time;
     }
@@ -171,6 +177,61 @@ export class WaterSurface extends Component {
         this._time += Math.max(0, Math.min(dt, 0.1)) * this.timeScale;
         this._uploadWaves();
         this._updateDebugProbe();
+    }
+
+    /**
+     * Updates one of five bounded visual wake sources.
+     *
+     * Position and direction are world-space because the current stylized water
+     * fragment shader evaluates wakes against v_position.xz.
+     */
+    public setWakeSource(
+        index: number,
+        worldPosition: Readonly<Vec3>,
+        worldDirection: Readonly<Vec3>,
+        intensity = 1,
+    ): void {
+        const i = Math.max(0, Math.min(MAX_WATER_WAKE_SOURCES - 1, Math.floor(index)));
+        const length = Math.sqrt(
+            worldDirection.x * worldDirection.x
+            + worldDirection.z * worldDirection.z,
+        );
+        const invLength = length > 1e-6 ? 1 / length : 0;
+        this._wakeData[i].set(
+            worldPosition.x,
+            worldPosition.z,
+            worldDirection.x * invLength,
+            worldDirection.z * invLength,
+        );
+        const value = Math.max(0, Math.min(1, intensity));
+        if (i < 4) {
+            if (i === 0) this._wakeIntensities.x = value;
+            else if (i === 1) this._wakeIntensities.y = value;
+            else if (i === 2) this._wakeIntensities.z = value;
+            else this._wakeIntensities.w = value;
+        } else {
+            this._wakeIntensity4 = value;
+        }
+        this._uploadWakes();
+    }
+
+    public clearWakeSource(index: number): void {
+        const i = Math.max(0, Math.min(MAX_WATER_WAKE_SOURCES - 1, Math.floor(index)));
+        if (i < 4) {
+            if (i === 0) this._wakeIntensities.x = 0;
+            else if (i === 1) this._wakeIntensities.y = 0;
+            else if (i === 2) this._wakeIntensities.z = 0;
+            else this._wakeIntensities.w = 0;
+        } else {
+            this._wakeIntensity4 = 0;
+        }
+        this._uploadWakes();
+    }
+
+    public clearWakeSources(): void {
+        this._wakeIntensities.set(0, 0, 0, 0);
+        this._wakeIntensity4 = 0;
+        this._uploadWakes();
     }
 
     public resetTime(time = 0): void {
@@ -264,18 +325,41 @@ export class WaterSurface extends Component {
     private _collectMaterials(): void {
         this._materialInstances.length = 0;
         if (!this._renderer) return;
+
         for (let i = 0; i < this._renderer.sharedMaterials.length; ++i) {
             const material = this._renderer.getMaterialInstance(i);
-            if (!material) continue;
-            const effectName = material.effectAsset?.name || '';
-            if (!effectName.includes('playable-water')) continue;
+            if (!material || !material.isValid) continue;
+
+            // Do not depend on EffectAsset.name here. Editor material refreshes
+            // can replace the material instance/effect object while keeping the
+            // same renderer slot. The uniform contract is the reliable test.
+            let supportsWater = false;
+            for (const pass of material.passes) {
+                if (pass.getHandle('waterWaveTime')) {
+                    supportsWater = true;
+                    break;
+                }
+            }
+            if (!supportsWater) continue;
             this._materialInstances.push(material);
         }
+
+        // A newly-created material instance starts from effect defaults. Reapply
+        // component-owned state immediately so editor edits/reimports cannot
+        // silently restore default waves.
+        this._uploadWakes();
     }
 
     private _uploadWaves(): void {
         if (!this._renderer) return;
-        if (!this._materialInstances.length) this._collectMaterials();
+
+        // Creator may recreate MaterialInstance objects after editing/reimporting
+        // a material. Cached instances then keep receiving uniforms while the
+        // renderer uses a fresh instance, which looks like a frozen/default wave.
+        // Refresh aggressively in Editor and occasionally at runtime.
+        if (EDITOR || !this._materialInstances.length || (++this._materialRefreshCounter % 120) === 0) {
+            this._collectMaterials();
+        }
 
         const waves = this.waves;
         const count = Math.max(1, Math.min(MAX_WATER_WAVES, Math.floor(this.waveCount)));
@@ -317,6 +401,24 @@ export class WaterSurface extends Component {
                 if (shapeHandle) pass.setUniform(shapeHandle, this._waveShape);
                 const timeHandle = pass.getHandle('waterWaveTime');
                 if (timeHandle) pass.setUniform(timeHandle, this._timeParams);
+            }
+        }
+    }
+
+    private _uploadWakes(): void {
+        if (!this._materialInstances.length) return;
+
+        for (const material of this._materialInstances) {
+            if (!material || !material.isValid) continue;
+            for (const pass of material.passes) {
+                for (let i = 0; i < MAX_WATER_WAKE_SOURCES; ++i) {
+                    const handle = pass.getHandle(`dynamicWakeData${i}`);
+                    if (handle) pass.setUniform(handle, this._wakeData[i]);
+                }
+                const intensitiesHandle = pass.getHandle('dynamicWakeIntensities');
+                if (intensitiesHandle) pass.setUniform(intensitiesHandle, this._wakeIntensities);
+                const intensity4Handle = pass.getHandle('dynamicWakeIntensity4');
+                if (intensity4Handle) pass.setUniform(intensity4Handle, this._wakeIntensity4);
             }
         }
     }
