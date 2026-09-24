@@ -53,6 +53,7 @@ export function sampleGerstnerWaves(
     time: number,
     waves: readonly IWaterWave[],
     out: IWaterSample = createWaterSample(),
+    activeCount = waves.length,
 ): IWaterSample {
     let px = x;
     let py = 0;
@@ -70,7 +71,7 @@ export function sampleGerstnerWaves(
     let velocityY = 0;
     let velocityZ = 0;
 
-    const count = Math.min(MAX_WATER_WAVES, waves.length);
+    const count = Math.max(0, Math.min(MAX_WATER_WAVES, waves.length, Math.floor(activeCount)));
     for (let i = 0; i < count; ++i) {
         const wave = waves[i];
         const dx0 = wave.direction.x;
