@@ -54,3 +54,6 @@ __TS_ENGINE__/
 # spread-adapter.cjs 复制到 bin/adapter(/bin 已忽略)。platforms 源码不再入库。
 /platforms
 
+
+# Generated from pinned @babylonjs/havok by scripts/sync-havok-runtime.cjs
+external/emscripten/havok/HavokPhysics.wasm
