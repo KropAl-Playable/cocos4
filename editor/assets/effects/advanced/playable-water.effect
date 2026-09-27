@@ -70,6 +70,7 @@ CCEffect %{
         waterWaveParams3:           { value: [0.95, 0.34, 5.1, 0.0], editor: { visible: false } }
         waterWaveShape:             { value: [0.25, 0.25, 0.25, 0.25], editor: { visible: false } }
         waterWaveTime:              { value: [0.0, 3.0, 0.0, 0.0], editor: { visible: false } }
+        waterWorldBounds:           { value: [0.0, 0.0, 1.0, 1.0], editor: { visible: false } }
 
         waterPadding0:              { value: 0.0, editor: { visible: false } }
         waterPadding1:              { value: 0.0, editor: { visible: false } }
@@ -113,6 +114,7 @@ CCProgram water-constants %{
     vec4 waterWaveParams3;
     vec4 waterWaveShape;
     vec4 waterWaveTime;
+    vec4 waterWorldBounds;
 
     float fReflect;
     float fresnelPow;
@@ -346,7 +348,11 @@ CCProgram unlit-fs %{
   }
 
   vec4 frag () {
-    vec2 surfaceUV = v_uv + v_position.xz * 0.1;
+    // All repeating water detail is world-space so neighboring mesh tiles read
+    // one continuous material field instead of restarting local UVs per tile.
+    vec2 surfaceUV = v_position.xz * 0.1;
+    vec2 boundsHalf = max(waterWorldBounds.zw, vec2(0.0001));
+    vec2 globalUV = (v_position.xz - waterWorldBounds.xy + boundsHalf) / (boundsHalf * 2.0);
     vec2 uvA = surfaceUV * normalScaleA
       + vec2(cc_time.x * normalSpeedA, cc_time.x * normalSpeedA * 0.61);
     vec2 uvB = surfaceUV * normalScaleB
@@ -371,8 +377,8 @@ CCProgram unlit-fs %{
     vec4 reflectColor = texture(reflectTexture, normalize(R));
     float fresnel = pow(clamp(1.0 - dot(N, -V), 0.0, 1.0), max(0.001, fresnelPow));
 
-    vec4 col = mainColor * texture(mainTexture, v_uv);
-    vec3 tint = mix(shallowColor.rgb, deepColor.rgb, clamp(v_uv.y, 0.0, 1.0));
+    vec4 col = mainColor * texture(mainTexture, surfaceUV);
+    vec3 tint = mix(shallowColor.rgb, deepColor.rgb, clamp(globalUV.y, 0.0, 1.0));
     col.rgb = mix(col.rgb, tint, depthTintStrength);
     col.rgb = mix(col.rgb, reflectColor.rgb, clamp(fReflect * fresnel * fresnelIntensity, 0.0, 1.0));
     col.rgb *= 1.0 - clamp(shadowReceiverStrength, 0.0, 1.0) * 0.18;
@@ -386,7 +392,7 @@ CCProgram unlit-fs %{
     );
     float foam = smoothstep(foamThresholdLow, max(foamThresholdHigh, foamThresholdLow + 0.0001), foamNoise)
       * foamIntensity;
-    float edgeDistance = min(min(v_uv.x, 1.0 - v_uv.x), min(v_uv.y, 1.0 - v_uv.y));
+    float edgeDistance = min(min(globalUV.x, 1.0 - globalUV.x), min(globalUV.y, 1.0 - globalUV.y));
     float edgeBand = 1.0 - smoothstep(0.0, max(0.001, edgeFoamWidth), edgeDistance);
     float edgeBreakup = mix(1.0, smoothstep(0.2, 0.8, foamNoise), clamp(edgeFoamNoiseAmount, 0.0, 1.0));
     float dynamicWakeFoamBreakup = mix(0.35, 1.0, smoothstep(0.28, 0.8, foamNoise));
@@ -406,7 +412,7 @@ CCProgram unlit-fs %{
     foam = clamp(
       foam
         + analyticalCrestFoam
-        + texture(wakeMaskTexture, v_uv * wakeScale).r * wakeIntensity
+        + texture(wakeMaskTexture, globalUV * wakeScale).r * wakeIntensity
         + edgeBand * edgeBreakup * edgeFoamIntensity
         + dynamicWakeFoam * dynamicWakeFoamIntensity * dynamicWakeFoamBreakup,
       0.0,
@@ -414,7 +420,7 @@ CCProgram unlit-fs %{
     );
     col.rgb = mix(col.rgb, foamColor.rgb, foam * foamColor.a);
 
-    vec2 D = v_uv - vec2(0.5, 0.5);
+    vec2 D = globalUV - vec2(0.5, 0.5);
     col.rgb = mix(col.rgb, rimColor.rgb, rimColor.a * smoothstep(0.0, 0.3, dot(D, D)));
     col.a *= waterAlpha;
 
