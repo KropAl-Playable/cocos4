@@ -11,7 +11,18 @@ CCEffect %{
         mainColor:            { value: [1, 1, 1, 1], editor: { type: color } }
         reflectTexture:       { value: white }
         fReflect:             { value: 0.5, editor: { slide: true, range: [0, 1], step: 0.01 } }
-        fresnelPow:           { value: 1.0 }
+        reflectionIntensity:  { value: 1.0, editor: { slide: true, range: [0, 2], step: 0.01 } }
+        reflectionRoughness:  { value: 0.12, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        fresnelPow:           { value: 4.0, editor: { slide: true, range: [0.25, 8], step: 0.05 } }
+        glossiness:           { value: 0.88, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        specularIntensity:    { value: 0.55, editor: { slide: true, range: [0, 4], step: 0.01 } }
+        specularColor:        { value: [1, 1, 1, 1], editor: { type: color } }
+        sunGlintIntensity:    { value: 0.9, editor: { slide: true, range: [0, 4], step: 0.01 } }
+        sunGlintGlossiness:   { value: 0.72, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        sunGlintWidth:        { value: 0.45, editor: { slide: true, range: [0.02, 1], step: 0.01 } }
+        sunGlintSparkle:      { value: 0.55, editor: { slide: true, range: [0, 1], step: 0.01 } }
+        sunGlintSparkleScale: { value: 8.0, editor: { slide: true, range: [0.5, 24], step: 0.1 } }
+        sunGlintColor:        { value: [1.0, 0.94, 0.82, 1], editor: { type: color } }
         noiseTexture:         { value: white }
         rimColor:             { value: [1, 1, 1, 1], editor: { type: color } }
         normalTextureA:       { value: normal }
@@ -71,6 +82,8 @@ CCEffect %{
         waterWaveShape:             { value: [0.25, 0.25, 0.25, 0.25], editor: { visible: false } }
         waterWaveTime:              { value: [0.0, 3.0, 0.0, 0.0], editor: { visible: false } }
         waterWorldBounds:           { value: [0.0, 0.0, 1.0, 1.0], editor: { visible: false } }
+        waterLightDirection:        { value: [0.3, -0.8, 0.5, 0.0], editor: { visible: false } }
+        waterLightColor:            { value: [1.0, 1.0, 1.0, 1.0], editor: { visible: false } }
 
         waterPadding0:              { value: 0.0, editor: { visible: false } }
         waterPadding1:              { value: 0.0, editor: { visible: false } }
@@ -97,6 +110,8 @@ CCProgram water-constants %{
     vec4 shallowColor;
     vec4 deepColor;
     vec4 foamColor;
+    vec4 specularColor;
+    vec4 sunGlintColor;
     vec4 dynamicWakeData0;
     vec4 dynamicWakeData1;
     vec4 dynamicWakeData2;
@@ -115,9 +130,20 @@ CCProgram water-constants %{
     vec4 waterWaveShape;
     vec4 waterWaveTime;
     vec4 waterWorldBounds;
+    vec4 waterLightDirection;
+    vec4 waterLightColor;
 
     float fReflect;
+    float reflectionIntensity;
+    float reflectionRoughness;
     float fresnelPow;
+    float glossiness;
+    float specularIntensity;
+    float sunGlintIntensity;
+    float sunGlintGlossiness;
+    float sunGlintWidth;
+    float sunGlintSparkle;
+    float sunGlintSparkleScale;
     float waterAlpha;
     float normalStrength;
     float normalScaleA;
@@ -371,16 +397,35 @@ CCProgram unlit-fs %{
     animatedNormal += dynamicWakeNormal * waveVisualAmount;
 
     vec3 N = normalize(v_normal + vec3(animatedNormal.x, 0.0, animatedNormal.y));
-    vec3 V = normalize(v_position - cc_cameraPos.xyz);
-    vec3 R = reflect(V, N);
-    R.xz += animatedNormal * reflectionDistortion;
+    vec3 V = normalize(cc_cameraPos.xyz - v_position);
+
+    // WebGL1-friendly rough reflection approximation: blend the high-frequency
+    // detail normal back toward the analytical large-wave normal before cubemap lookup.
+    vec3 reflectionNormal = normalize(mix(N, normalize(v_normal), clamp(reflectionRoughness, 0.0, 1.0)));
+    vec3 R = reflect(-V, reflectionNormal);
+    R.xz += animatedNormal * reflectionDistortion * (1.0 - reflectionRoughness);
     vec4 reflectColor = texture(reflectTexture, normalize(R));
-    float fresnel = pow(clamp(1.0 - dot(N, -V), 0.0, 1.0), max(0.001, fresnelPow));
+    float fresnel = pow(clamp(1.0 - dot(N, V), 0.0, 1.0), max(0.001, fresnelPow));
 
     vec4 col = mainColor * texture(mainTexture, surfaceUV);
     vec3 tint = mix(shallowColor.rgb, deepColor.rgb, clamp(globalUV.y, 0.0, 1.0));
     col.rgb = mix(col.rgb, tint, depthTintStrength);
-    col.rgb = mix(col.rgb, reflectColor.rgb, clamp(fReflect * fresnel * fresnelIntensity, 0.0, 1.0));
+
+    float reflectionWeight = clamp(
+      fReflect * reflectionIntensity * fresnel * fresnelIntensity,
+      0.0,
+      1.0
+    );
+    col.rgb = mix(col.rgb, reflectColor.rgb, reflectionWeight);
+
+    vec3 L = normalize(-waterLightDirection.xyz);
+    vec3 H = normalize(L + V);
+    float ndotl = max(dot(N, L), 0.0);
+    float ndoth = max(dot(N, H), 0.0);
+    float specularPower = mix(8.0, 512.0, clamp(glossiness, 0.0, 1.0));
+    float directSpecular = pow(ndoth, specularPower) * ndotl * max(0.0, specularIntensity);
+    col.rgb += specularColor.rgb * waterLightColor.rgb * directSpecular;
+
     col.rgb *= 1.0 - clamp(shadowReceiverStrength, 0.0, 1.0) * 0.18;
 
     vec2 foamUV = surfaceUV * foamScale
@@ -392,6 +437,26 @@ CCProgram unlit-fs %{
     );
     float foam = smoothstep(foamThresholdLow, max(foamThresholdHigh, foamThresholdLow + 0.0001), foamNoise)
       * foamIntensity;
+
+    // Broad physically-inspired sun/moon glitter path. The large-wave normal
+    // selects the reflection band; detail normals and noise break it into sparkles.
+    vec3 glintNormal = normalize(mix(normalize(v_normal), N, clamp(sunGlintWidth, 0.02, 1.0)));
+    vec3 glintHalf = normalize(L + V);
+    float glintNdotH = max(dot(glintNormal, glintHalf), 0.0);
+    float glintPower = mix(12.0, 384.0, clamp(sunGlintGlossiness, 0.0, 1.0));
+    float glintBand = pow(glintNdotH, glintPower) * max(dot(glintNormal, L), 0.0);
+    float sparkleNoise = texture(
+      noiseTexture,
+      surfaceUV * max(0.5, sunGlintSparkleScale)
+        + vec2(cc_time.x * 0.035, -cc_time.x * 0.021)
+    ).r;
+    float sparkle = mix(
+      1.0,
+      smoothstep(0.35, 0.92, sparkleNoise + (normalA.x + normalB.y) * 0.16),
+      clamp(sunGlintSparkle, 0.0, 1.0)
+    );
+    float sunGlint = glintBand * sparkle * max(0.0, sunGlintIntensity);
+    col.rgb += sunGlintColor.rgb * waterLightColor.rgb * sunGlint;
     float edgeDistance = min(min(globalUV.x, 1.0 - globalUV.x), min(globalUV.y, 1.0 - globalUV.y));
     float edgeBand = 1.0 - smoothstep(0.0, max(0.001, edgeFoamWidth), edgeDistance);
     float edgeBreakup = mix(1.0, smoothstep(0.2, 0.8, foamNoise), clamp(edgeFoamNoiseAmount, 0.0, 1.0));
