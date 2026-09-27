@@ -3,20 +3,36 @@
  SPDX-License-Identifier: MIT
  */
 
+import { BUILD, LOAD_HAVOK_MANUALLY } from 'internal:constants';
+import { Game, game } from '../../game';
+import { PhysicsSystem } from '../framework/physics-system';
+import { selector } from '../framework/physics-selector';
+import { HavokWorld } from './havok-world';
+import { HavokRigidBody } from './havok-rigid-body';
+import {
+    HavokBoxShape,
+    HavokCapsuleShape,
+    HavokSphereShape,
+} from './shapes/havok-shape';
 import { waitForHavokInstantiation } from './instantiated';
+
+game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
+    selector.register('havok', {
+        PhysicsWorld: HavokWorld,
+        RigidBody: HavokRigidBody,
+        BoxShape: HavokBoxShape,
+        SphereShape: HavokSphereShape,
+        CapsuleShape: HavokCapsuleShape,
+    });
+});
 
 let loadHavokPromise: Promise<void> | undefined;
 
-/**
- * Loads the standalone Havok Web runtime.
- *
- * Task 004 ports the runtime vertical slice before registering a Cocos physics
- * wrapper. Selector registration will be added together with HavokWorld/body/
- * primitive-shape wrappers so selecting the backend can never produce a
- * half-registered physics system.
- */
 export function loadWasmModuleHavok (): Promise<void> {
     if (loadHavokPromise) return loadHavokPromise;
     loadHavokPromise = waitForHavokInstantiation();
+    if (BUILD && LOAD_HAVOK_MANUALLY) {
+        loadHavokPromise = loadHavokPromise.then(() => PhysicsSystem.constructAndRegisterManually());
+    }
     return loadHavokPromise;
 }
