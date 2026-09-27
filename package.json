@@ -30,7 +30,9 @@
     "update:engine-version": "node ./scripts/checkout-engine-version.js",
     "update:native-external": "node ./native/utils/update-external.js",
     "verify:engine-version": "node ./scripts/verify-engine-version.js",
-    "sync:havok-runtime": "node ./scripts/sync-havok-runtime.cjs"
+    "sync:havok-runtime": "node ./scripts/sync-havok-runtime.cjs",
+    "test:havok-wasm": "npm run sync:havok-runtime && node ./tests/physics/havok-wasm-smoke.mjs",
+    "bench:havok": "npm run sync:havok-runtime && node ./tests/physics/havok-benchmark.mjs"
   },
   "repository": {
     "type": "git",
