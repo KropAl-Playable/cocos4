@@ -39,6 +39,8 @@ Next gates:
 - ✅ glossy cubemap reflection controls with WebGL1-friendly roughness approximation;
 - ✅ direct specular/gloss controls and scene main-light synchronization;
 - ✅ optional sun/moon glint path with tunable width, glossiness and sparkle breakup;
+- ✅ cubemap readability controls extended with non-grazing base reflection and contrast shaping;
+- ✅ sun/moon glint band auto-orients from main-light projection with artist rotation offset;
 - ⏳ local validation/tuning of glossy reflection and glint shading;
 - ⏳ formal LOW / MEDIUM / HIGH quality presets and final performance pass.
 
