@@ -12,7 +12,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "postinstall": "node scripts/spread-pal.cjs && npm run build:debug-infos && npm run build:declaration && node scripts/spread-adapter.cjs && npm run build:native-pack-tool",
+    "postinstall": "npm run sync:havok-runtime && node scripts/spread-pal.cjs && npm run build:debug-infos && npm run build:declaration && node scripts/spread-adapter.cjs && npm run build:native-pack-tool",
     "build": "npm run build:min && npm run build:declaration",
     "build:cli": "npm run build:cli-min && npm run build:declaration",
     "build:adapter": "node ./scripts/build-adapter.js",
