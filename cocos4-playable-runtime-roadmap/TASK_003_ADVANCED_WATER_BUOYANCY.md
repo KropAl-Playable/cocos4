@@ -6,7 +6,9 @@ Implement a visually rich but compact water system for playable ads, with a ligh
 
 ## Implementation status
 
-Initial Task 003 foundation is now implemented on `feat/advanced-water-buoyancy`:
+**Task 003 v0.1 functional scope is complete** on `feat/advanced-water-buoyancy`.
+
+Implemented and locally validated:
 
 - ✅ shared bounded 1–4 wave Gerstner evaluator;
 - ✅ analytical displaced position, normal and surface velocity on CPU;
@@ -48,8 +50,10 @@ Next gates:
 - ✅ MEDIUM enables dual detail normals, cubemap reflection, foam/crest foam and two wake sources;
 - ✅ HIGH enables the full five-source wake path and sun/moon glint;
 - ✅ steady-state cleanup: WaterSurface no longer allocates a wave array every sample/update and no longer performs periodic runtime hierarchy/material rescans;
-- ⏳ local shader-compile/browser validation for all three quality variants;
-- ⏳ final device/performance measurements and v0.1 closeout.
+- ✅ local shader-compile/browser validation for all three quality variants;
+- ✅ tiled surface/material continuity, glossy reflection, directional glint and wake behavior validated in Creator/browser;
+- ✅ v0.1 code-side performance cleanup complete;
+- ⏳ external benchmark tail only: target-device FPS/GPU timing, compressed build-size delta, Safari/iPhone and Android WebView checks where available.
 
 The key requirement is:
 
@@ -389,6 +393,18 @@ CPU height should track the rendered low-frequency surface closely.
 - 30 bodies where practical;
 - Safari/iPhone;
 - Android WebView when available.
+
+## v0.1 closure
+
+The implementation/authoring scope is complete. Remaining work is benchmark/regression evidence rather than feature development:
+
+- record 1 / 4 / 9 tile performance for LOW / MEDIUM / HIGH;
+- record 1 / 5 wake-source performance;
+- record 1 / 10 buoyancy-body CPU cost where practical;
+- record build-size delta for the effect/components;
+- validate Safari/iPhone and Android WebView when representative hardware is available.
+
+These measurements remain important for promotion into a production preset, but they do not block starting Task 004.
 
 ## Acceptance criteria
 
