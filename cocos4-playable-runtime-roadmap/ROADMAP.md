@@ -12,8 +12,8 @@ The roadmap favors systems that move expensive work offline, reuse compact mesh 
 |---:|---|---|---|
 | 1 | **AO / lighting baker** | ✅ v0.1 working | Vertex AO integration across custom materials + production validation |
 | 2 | **Cage deformation** | ✅ v0.1 functional complete | regression/mobile benchmark tail |
-| 3 | **Advanced water + buoyancy** | ⏭ next | shared visual/CPU wave model |
-| 4 | **Havok backend** | planned | playable-size/runtime feasibility |
+| 3 | **Advanced water + buoyancy** | ✅ v0.1 functional complete | device/build-size benchmark tail |
+| 4 | **Havok backend** | ⏭ next | playable-size/runtime feasibility |
 | 5 | **GPU particles** | planned | scalable particle simulation + fallback |
 | 6 | **GPU-driven VFX / compute** | planned | reusable custom GPU pass framework |
 | 7 | **SDF collision / VFX** | research | compact spatial interaction representation |
@@ -104,7 +104,9 @@ Do not jump directly to generalized tetrahedral cages. First prove the lightweig
 
 # Phase 3 — Advanced Water + Buoyancy
 
-This is the **next major task** after the short AO/Cage integration pass.
+## Status
+
+**v0.1 functional scope is complete.** Remaining work is a non-blocking device/build-size benchmark tail while Phase 4 begins.
 
 ## Core idea
 
