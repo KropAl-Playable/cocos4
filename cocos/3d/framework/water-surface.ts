@@ -129,6 +129,9 @@ export class WaterSurface extends Component {
     @property
     public includeChildRenderers = true;
 
+    @property
+    public syncSceneMainLight = true;
+
     @property({ type: Node })
     public debugProbe: Node | null = null;
 
@@ -151,6 +154,8 @@ export class WaterSurface extends Component {
     private _timeParams = new Vec4();
     // centerX, centerZ, halfSizeX, halfSizeZ for the full tiled surface.
     private _worldBounds = new Vec4(0, 0, 1, 1);
+    private _lightDirection = new Vec4(0.3, -0.8, 0.5, 0);
+    private _lightColor = new Vec4(1, 1, 1, 1);
 
     private _wakeData: Vec4[] = [new Vec4(), new Vec4(), new Vec4(), new Vec4(), new Vec4()];
     private _wakeIntensities = new Vec4();
@@ -439,6 +444,7 @@ export class WaterSurface extends Component {
             Math.max(0, Math.min(1, waves[3].crestSharpness)),
         );
         this._timeParams.set(this._time, count, 0, 0);
+        this._updateMainLight();
 
         for (const material of this._materialInstances) {
             if (!material) continue;
@@ -455,8 +461,25 @@ export class WaterSurface extends Component {
                 if (timeHandle) pass.setUniform(timeHandle, this._timeParams);
                 const boundsHandle = pass.getHandle('waterWorldBounds');
                 if (boundsHandle) pass.setUniform(boundsHandle, this._worldBounds);
+                const lightDirectionHandle = pass.getHandle('waterLightDirection');
+                if (lightDirectionHandle) pass.setUniform(lightDirectionHandle, this._lightDirection);
+                const lightColorHandle = pass.getHandle('waterLightColor');
+                if (lightColorHandle) pass.setUniform(lightColorHandle, this._lightColor);
             }
         }
+    }
+
+    private _updateMainLight(): void {
+        if (!this.syncSceneMainLight) return;
+
+        const scene = this.node.scene;
+        const mainLight = scene?.renderScene?.mainLight;
+        if (!mainLight) return;
+
+        const direction = mainLight.direction;
+        const color = mainLight.finalColor;
+        this._lightDirection.set(direction.x, direction.y, direction.z, 0);
+        this._lightColor.set(color.x, color.y, color.z, 1);
     }
 
     private _uploadWakes(): void {
