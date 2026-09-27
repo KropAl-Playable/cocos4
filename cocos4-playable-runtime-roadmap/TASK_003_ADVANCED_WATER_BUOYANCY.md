@@ -41,8 +41,15 @@ Next gates:
 - ✅ optional sun/moon glint path with tunable width, glossiness and sparkle breakup;
 - ✅ cubemap readability controls extended with non-grazing base reflection and contrast shaping;
 - ✅ sun/moon glint band auto-orients from main-light projection with artist rotation offset;
-- ⏳ local validation/tuning of glossy reflection and glint shading;
-- ⏳ formal LOW / MEDIUM / HIGH quality presets and final performance pass.
+- ✅ local validation/tuning of glossy reflection and glint shading;
+- ✅ formal LOW / MEDIUM / HIGH shader quality variants controlled by `WaterSurface.quality`;
+- ✅ runtime `setQuality()` API; quality affects fragment presentation only and keeps the shared CPU/GPU gameplay wave surface unchanged;
+- ✅ LOW removes cubemap/foam/wake/glint work and keeps one detail-normal layer + cheap Fresnel/specular;
+- ✅ MEDIUM enables dual detail normals, cubemap reflection, foam/crest foam and two wake sources;
+- ✅ HIGH enables the full five-source wake path and sun/moon glint;
+- ✅ steady-state cleanup: WaterSurface no longer allocates a wave array every sample/update and no longer performs periodic runtime hierarchy/material rescans;
+- ⏳ local shader-compile/browser validation for all three quality variants;
+- ⏳ final device/performance measurements and v0.1 closeout.
 
 The key requirement is:
 
@@ -175,19 +182,29 @@ Responsible for:
 
 ~~~text
 LOW
-- 2 gameplay waves
-- analytical normal
-- simple Fresnel/specular
+- same gameplay wave surface as higher tiers
+- one detail-normal texture
+- cheap Fresnel/specular
+- no cubemap sample
+- no foam/wakes/glint
 
 MEDIUM
-- 3–4 gameplay waves
-- one visual ripple/detail layer
-- foam/wake
+- same gameplay wave surface
+- dual detail normals
+- cubemap reflection
+- foam + analytical crest foam
+- up to 2 dynamic wake sources
 
-HIGH / optional
-- richer normal/detail
-- extra reflection/refraction features
+HIGH
+- same gameplay wave surface
+- full reflection/gloss stack
+- full 5-source dynamic wakes
+- sun/moon directional glint + sparkle breakup
 ~~~
+
+Quality variants are shader compile variants. They intentionally do **not** reduce or alter the
+analytical gameplay wave count, because CPU sampling/buoyancy must remain identical to the
+visible large-scale geometry when quality changes.
 
 Quality tiers must not change the CPU buoyancy surface.
 
