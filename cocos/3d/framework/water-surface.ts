@@ -73,7 +73,6 @@ const _localSample = createWaterSample();
 const _worldPosition = new Vec3();
 const _worldNormal = new Vec3();
 const _worldVelocity = new Vec3();
-const _probeInputLocal = new Vec3();
 const _probeInputWorld = new Vec3();
 const _probeNormalEnd = new Vec3();
 const _debugProbeSample: IWorldWaterSample = {
@@ -96,9 +95,9 @@ export interface IWorldWaterSample {
 /**
  * Authoritative analytical water source for both GPU presentation and CPU gameplay.
  *
- * v0.1 evaluates waves in this node's local XZ plane. Translation, rotation and
- * scale are accounted for when sampling world positions. The renderer receives
- * exactly the same wave parameters and component-owned time.
+ * v0.1 evaluates gameplay waves in world XZ so translated mesh tiles share a
+ * continuous phase field. The component owns wave time/parameters and global
+ * tiled-surface bounds, and pushes the same contract to all managed materials.
  */
 @ccclass('cc.WaterSurface')
 @menu('Mesh/WaterSurface')
@@ -150,6 +149,8 @@ export class WaterSurface extends Component {
     private _waveParams: Vec4[] = [new Vec4(), new Vec4(), new Vec4(), new Vec4()];
     private _waveShape = new Vec4();
     private _timeParams = new Vec4();
+    // centerX, centerZ, halfSizeX, halfSizeZ for the full tiled surface.
+    private _worldBounds = new Vec4(0, 0, 1, 1);
 
     private _wakeData: Vec4[] = [new Vec4(), new Vec4(), new Vec4(), new Vec4(), new Vec4()];
     private _wakeIntensities = new Vec4();
@@ -343,6 +344,7 @@ export class WaterSurface extends Component {
     private _collectMaterials(): void {
         this._materialInstances.length = 0;
         this._collectRenderers();
+        this._updateWorldBounds();
 
         for (const renderer of this._renderers) {
             for (let i = 0; i < renderer.sharedMaterials.length; ++i) {
@@ -366,6 +368,40 @@ export class WaterSurface extends Component {
         // component-owned state immediately so editor edits/reimports cannot
         // silently restore default waves.
         this._uploadWakes();
+    }
+
+    private _updateWorldBounds(): void {
+        let minX = Number.POSITIVE_INFINITY;
+        let minZ = Number.POSITIVE_INFINITY;
+        let maxX = Number.NEGATIVE_INFINITY;
+        let maxZ = Number.NEGATIVE_INFINITY;
+
+        for (const renderer of this._renderers) {
+            const model = renderer.model;
+            if (!model) continue;
+            model.updateWorldBound();
+            const bounds = model.worldBounds;
+            if (!bounds) continue;
+
+            minX = Math.min(minX, bounds.center.x - bounds.halfExtents.x);
+            minZ = Math.min(minZ, bounds.center.z - bounds.halfExtents.z);
+            maxX = Math.max(maxX, bounds.center.x + bounds.halfExtents.x);
+            maxZ = Math.max(maxZ, bounds.center.z + bounds.halfExtents.z);
+        }
+
+        if (!Number.isFinite(minX) || !Number.isFinite(minZ)
+            || !Number.isFinite(maxX) || !Number.isFinite(maxZ)) {
+            const position = this.node.worldPosition;
+            this._worldBounds.set(position.x, position.z, 1, 1);
+            return;
+        }
+
+        this._worldBounds.set(
+            (minX + maxX) * 0.5,
+            (minZ + maxZ) * 0.5,
+            Math.max((maxX - minX) * 0.5, 1e-4),
+            Math.max((maxZ - minZ) * 0.5, 1e-4),
+        );
     }
 
     private _uploadWaves(): void {
@@ -417,6 +453,8 @@ export class WaterSurface extends Component {
                 if (shapeHandle) pass.setUniform(shapeHandle, this._waveShape);
                 const timeHandle = pass.getHandle('waterWaveTime');
                 if (timeHandle) pass.setUniform(timeHandle, this._timeParams);
+                const boundsHandle = pass.getHandle('waterWorldBounds');
+                if (boundsHandle) pass.setUniform(boundsHandle, this._worldBounds);
             }
         }
     }
