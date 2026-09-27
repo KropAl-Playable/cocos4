@@ -36,8 +36,11 @@ Next gates:
 - ✅ material detail/foam/main mapping moved to world space for seamless tiled water;
 - ✅ rim/edge-foam/static-wake bounds now use the full WaterSurface tile group instead of per-mesh UVs;
 - ✅ speed-driven `WaterWakeSource` component for one of five bounded wake slots;
-- ⏳ local validation of global material bounds and `WaterWakeSource`;
-- ⏳ quality tiers and final performance pass.
+- ✅ glossy cubemap reflection controls with WebGL1-friendly roughness approximation;
+- ✅ direct specular/gloss controls and scene main-light synchronization;
+- ✅ optional sun/moon glint path with tunable width, glossiness and sparkle breakup;
+- ⏳ local validation/tuning of glossy reflection and glint shading;
+- ⏳ formal LOW / MEDIUM / HIGH quality presets and final performance pass.
 
 The key requirement is:
 
