@@ -2,7 +2,14 @@
 
 ## Objective
 
-Evaluate Havok as an optional high-end physics backend for the playable-runtime fork without making it a mandatory dependency for ordinary builds.
+Port and re-validate the existing Creator 3.8.8 Havok prototype from
+`KropAl-Playable/cocos-engine@codex/box3d-share` into the COCOS 4 playable-runtime fork,
+keeping Havok optional and removable from ordinary builds.
+
+The 3.8.8 branch is not just a proof-of-concept: it already contains a functional adapter,
+loader, build-feature slicing, queries/constraints, benchmark harnesses, single-HTML WASM
+packing validation, and production notes. Task 004 therefore starts as a **selective port +
+compatibility audit**, not a greenfield integration.
 
 The first milestone is intentionally **feasibility-first**:
 
@@ -48,25 +55,60 @@ havok
 
 The Havok backend must remain opt-in. Existing builtin / cannon / bullet / physx paths must remain untouched.
 
-## Candidate Web runtime
+## Existing 3.8.8 reference implementation
 
-The initial Web candidate is `@babylonjs/havok`, which exposes the standalone Havok WebAssembly runtime independently of Babylon's scene/physics wrapper.
+Reference branch:
 
-Initialization shape:
-
-~~~ts
-import HavokPhysics from '@babylonjs/havok';
-
-const havok = await HavokPhysics();
+~~~text
+KropAl-Playable/cocos-engine
+branch: codex/box3d-share
+head: 7f5eb1890ef883e6a255c4f8047fe5731e12f06d
 ~~~
 
-Do **not** import Babylon's HavokPlugin or Babylon scene abstractions. Task 004 should talk directly to the returned Havok interface and implement Cocos physics specs itself.
+Useful pieces to port selectively:
 
-Pin the package version during the experiment rather than tracking latest implicitly.
+- `cocos/physics/havok/havok-loader.ts`;
+- `instantiate.ts` / `instantiated.ts`;
+- `havok-world.ts`, `havok-rigid-body.ts`, shared-body/handle-registry/util/types;
+- primitive/compound/mesh shape wrappers;
+- ray/shape queries and constraints;
+- feature registration in `cc.config.json`;
+- `exports/physics-havok.ts`;
+- real-WASM smoke and benchmark harnesses;
+- single-HTML packer smoke methodology;
+- capability/validation/playable-guideline documentation.
 
-## Phase A — payload/startup gate
+Do **not** cherry-pick the prototype commit wholesale: that branch also contains generated temporary
+engine builds and unrelated extension/tool changes. Port the Havok source and build integration in
+small reviewable commits.
 
-Before implementing the full adapter, establish:
+## Candidate Web runtime
+
+The proven Web runtime is `@babylonjs/havok@1.3.14`, which exposes the standalone Havok WebAssembly runtime independently of Babylon's scene/physics wrapper.
+
+The 3.8.8 experiment exposed an important Creator-specific packaging issue: QuickCompiler could
+resolve the package's conditional `types` export and pass `HavokPhysics.d.ts` to Rollup as
+JavaScript. The working path vendors the Emscripten ESM factory beside the WASM and imports it by
+relative source path, while keeping `@babylonjs/havok@1.3.14` as development provenance/types.
+
+Do **not** import Babylon's HavokPlugin or Babylon scene abstractions. The adapter talks directly to
+the Havok interface.
+
+## Phase A — COCOS 4 port/feasibility gate
+
+The 3.8.8 prototype already established useful desktop/build-size baselines:
+
+~~~text
+Havok WASM raw                         2,094,563 B
+WASM Deflate 9 + Base64                 882,732 B
+WASM Brotli Q9 + Base64                 766,656 B
+Havok core engine build Deflate+B64   1,431,180 B
+Havok core engine build Brotli Q9     1,239,252 B
+~~~
+
+These values are reference measurements, not COCOS 4 promises. Re-measure after the port.
+
+Before expanding the COCOS 4 adapter, establish:
 
 - package JS bytes;
 - raw WASM bytes;
@@ -206,11 +248,17 @@ A Havok v0.1 experiment is successful if:
 
 ## First implementation step
 
-Start with a **runtime probe**, not the full adapter:
+Start by porting the smallest proven vertical slice from the 3.8.8 branch:
 
-1. add the pinned Havok Web dependency;
-2. create an isolated loader that initializes the WASM runtime;
-3. expose initialization timing and runtime availability;
-4. verify it can be bundled by the custom engine build;
-5. measure payload delta;
-6. only then implement `HavokWorld` and register `havok` with the selector.
+1. vendor/pin Havok 1.3.14 ESM factory + WASM using the proven relative-import layout;
+2. port `HavokLoader` and the PAL-based async instantiation path;
+3. add `physics-havok` as an isolated engine feature and manual-load constant;
+4. port the real-WASM smoke test;
+5. verify COCOS 4 build + browser initialization + single-HTML packaging;
+6. port minimal `HavokWorld` + `HavokRigidBody` + Box/Sphere/Capsule;
+7. then bring over the transform-buffer sync optimization and remaining validated features.
+
+The previous adapter's `HP_World_GetBodyBuffer` + per-body transform-offset path is particularly
+valuable: its desktop benchmark showed roughly 15–23× lower transform-read overhead than calling
+`HP_Body_GetQTransform` per body. Preserve that design unless COCOS 4 provides a better native
+batch-sync path.
