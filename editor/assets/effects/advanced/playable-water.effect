@@ -325,6 +325,8 @@ CCProgram playable-water-vs %{
 
 CCProgram unlit-fs %{
   precision highp float;
+  #pragma define-meta WATER_MEDIUM
+  #pragma define-meta WATER_HIGH
   #include <legacy/output>
   #include <legacy/fog-fs>
   #include <water-constants>
@@ -398,34 +400,44 @@ CCProgram unlit-fs %{
     vec2 uvB = surfaceUV * normalScaleB
       + vec2(-cc_time.x * normalSpeedB * 0.53, cc_time.x * normalSpeedB);
     vec2 normalA = texture(normalTextureA, uvA).rg * 2.0 - 1.0;
-    vec2 normalB = texture(normalTextureB, uvB).rg * 2.0 - 1.0;
+    vec2 normalB = vec2(0.0);
+  #if WATER_MEDIUM
+    normalB = texture(normalTextureB, uvB).rg * 2.0 - 1.0;
     vec2 animatedNormal = (normalA + normalB) * 0.5 * normalStrength * waveVisualAmount;
+  #else
+    vec2 animatedNormal = normalA * normalStrength * 0.55 * waveVisualAmount;
+  #endif
 
     float dynamicWakeFoam = 0.0;
     vec2 dynamicWakeNormal = vec2(0.0);
+  #if WATER_MEDIUM
     addDynamicWake(dynamicWakeData0, dynamicWakeIntensities.x, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
     addDynamicWake(dynamicWakeData1, dynamicWakeIntensities.y, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
-    addDynamicWake(dynamicWakeData2, dynamicWakeIntensities.z, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
-    addDynamicWake(dynamicWakeData3, dynamicWakeIntensities.w, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
-    addDynamicWake(dynamicWakeData4, dynamicWakeIntensity4, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    #if WATER_HIGH
+      addDynamicWake(dynamicWakeData2, dynamicWakeIntensities.z, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+      addDynamicWake(dynamicWakeData3, dynamicWakeIntensities.w, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+      addDynamicWake(dynamicWakeData4, dynamicWakeIntensity4, v_position.xz, dynamicWakeFoam, dynamicWakeNormal);
+    #endif
     animatedNormal += dynamicWakeNormal * waveVisualAmount;
+  #endif
 
     vec3 N = normalize(v_normal + vec3(animatedNormal.x, 0.0, animatedNormal.y));
     vec3 V = normalize(cc_cameraPos.xyz - v_position);
 
     // WebGL1-friendly rough reflection approximation: blend the high-frequency
     // detail normal back toward the analytical large-wave normal before cubemap lookup.
-    vec3 reflectionNormal = normalize(mix(N, normalize(v_normal), clamp(reflectionRoughness, 0.0, 1.0)));
-    vec3 R = reflect(-V, reflectionNormal);
-    R.xz += animatedNormal * reflectionDistortion * (1.0 - reflectionRoughness);
-    vec4 reflectColor = texture(reflectTexture, normalize(R));
-    reflectColor.rgb = pow(max(reflectColor.rgb, vec3(0.0001)), vec3(max(0.5, reflectionContrast)));
     float fresnel = pow(clamp(1.0 - dot(N, V), 0.0, 1.0), max(0.001, fresnelPow));
 
     vec4 col = mainColor * texture(mainTexture, surfaceUV);
     vec3 tint = mix(shallowColor.rgb, deepColor.rgb, clamp(globalUV.y, 0.0, 1.0));
     col.rgb = mix(col.rgb, tint, depthTintStrength);
 
+  #if WATER_MEDIUM
+    vec3 reflectionNormal = normalize(mix(N, normalize(v_normal), clamp(reflectionRoughness, 0.0, 1.0)));
+    vec3 R = reflect(-V, reflectionNormal);
+    R.xz += animatedNormal * reflectionDistortion * (1.0 - reflectionRoughness);
+    vec4 reflectColor = texture(reflectTexture, normalize(R));
+    reflectColor.rgb = pow(max(reflectColor.rgb, vec3(0.0001)), vec3(max(0.5, reflectionContrast)));
     float reflectionFresnel = mix(
       clamp(reflectionBase, 0.0, 0.5),
       1.0,
@@ -437,6 +449,10 @@ CCProgram unlit-fs %{
       1.0
     );
     col.rgb = mix(col.rgb, reflectColor.rgb, reflectionWeight);
+  #else
+    // LOW keeps only a cheap Fresnel lift; no cubemap sample.
+    col.rgb += specularColor.rgb * fresnel * fresnelIntensity * 0.08;
+  #endif
 
     vec3 L = normalize(-waterLightDirection.xyz);
     vec3 H = normalize(L + V);
@@ -448,6 +464,7 @@ CCProgram unlit-fs %{
 
     col.rgb *= 1.0 - clamp(shadowReceiverStrength, 0.0, 1.0) * 0.18;
 
+  #if WATER_MEDIUM
     vec2 foamUV = surfaceUV * foamScale
       + vec2(cc_time.x * foamSpeed, -cc_time.x * foamSpeed * 0.37);
     float foamNoise = mix(
@@ -458,48 +475,49 @@ CCProgram unlit-fs %{
     float foam = smoothstep(foamThresholdLow, max(foamThresholdHigh, foamThresholdLow + 0.0001), foamNoise)
       * foamIntensity;
 
-    // Broad physically-inspired sun/moon glitter path. The large-wave normal
-    // selects the reflection band; detail normals and noise break it into sparkles.
-    vec3 glintNormal = normalize(mix(normalize(v_normal), N, clamp(sunGlintWidth, 0.02, 1.0)));
-    vec3 glintHalf = normalize(L + V);
-    float glintNdotH = max(dot(glintNormal, glintHalf), 0.0);
-    float glintPower = mix(12.0, 384.0, clamp(sunGlintGlossiness, 0.0, 1.0));
+    #if WATER_HIGH
+      // Broad physically-inspired sun/moon glitter path. The large-wave normal
+      // selects the reflection band; detail normals and noise break it into sparkles.
+      vec3 glintNormal = normalize(mix(normalize(v_normal), N, clamp(sunGlintWidth, 0.02, 1.0)));
+      vec3 glintHalf = normalize(L + V);
+      float glintNdotH = max(dot(glintNormal, glintHalf), 0.0);
+      float glintPower = mix(12.0, 384.0, clamp(sunGlintGlossiness, 0.0, 1.0));
 
-    // Orient the long glint band from the projected main-light direction, then
-    // allow an artist-authored rotation offset relative to the whole water surface.
-    vec2 lightXZ = normalize(L.xz + vec2(0.0001, 0.0));
-    float glintAngle = radians(sunGlintRotation);
-    float glintCos = cos(glintAngle);
-    float glintSin = sin(glintAngle);
-    vec2 glintDir = vec2(
-      lightXZ.x * glintCos - lightXZ.y * glintSin,
-      lightXZ.x * glintSin + lightXZ.y * glintCos
-    );
-    vec2 glintPerp = vec2(-glintDir.y, glintDir.x);
-    vec2 glintDelta = (v_position.xz - waterWorldBounds.xy) / max(waterWorldBounds.zw, vec2(0.0001));
-    float acrossGlint = abs(dot(glintDelta, glintPerp));
-    float directionalBand = 1.0 - smoothstep(
-      max(0.005, sunGlintBandWidth * 0.12),
-      max(0.01, sunGlintBandWidth),
-      acrossGlint
-    );
+      vec2 lightXZ = normalize(L.xz + vec2(0.0001, 0.0));
+      float glintAngle = radians(sunGlintRotation);
+      float glintCos = cos(glintAngle);
+      float glintSin = sin(glintAngle);
+      vec2 glintDir = vec2(
+        lightXZ.x * glintCos - lightXZ.y * glintSin,
+        lightXZ.x * glintSin + lightXZ.y * glintCos
+      );
+      vec2 glintPerp = vec2(-glintDir.y, glintDir.x);
+      vec2 glintDelta = (v_position.xz - waterWorldBounds.xy) / max(waterWorldBounds.zw, vec2(0.0001));
+      float acrossGlint = abs(dot(glintDelta, glintPerp));
+      float directionalBand = 1.0 - smoothstep(
+        max(0.005, sunGlintBandWidth * 0.12),
+        max(0.01, sunGlintBandWidth),
+        acrossGlint
+      );
 
-    float glintBand = pow(glintNdotH, glintPower)
-      * max(dot(glintNormal, L), 0.0)
-      * directionalBand;
-    float sparkleNoise = texture(
-      noiseTexture,
-      surfaceUV * max(0.5, sunGlintSparkleScale)
-        + glintDir * cc_time.x * 0.028
-        + glintPerp * cc_time.x * 0.011
-    ).r;
-    float sparkle = mix(
-      1.0,
-      smoothstep(0.35, 0.92, sparkleNoise + (normalA.x + normalB.y) * 0.16),
-      clamp(sunGlintSparkle, 0.0, 1.0)
-    );
-    float sunGlint = glintBand * sparkle * max(0.0, sunGlintIntensity);
-    col.rgb += sunGlintColor.rgb * waterLightColor.rgb * sunGlint;
+      float glintBand = pow(glintNdotH, glintPower)
+        * max(dot(glintNormal, L), 0.0)
+        * directionalBand;
+      float sparkleNoise = texture(
+        noiseTexture,
+        surfaceUV * max(0.5, sunGlintSparkleScale)
+          + glintDir * cc_time.x * 0.028
+          + glintPerp * cc_time.x * 0.011
+      ).r;
+      float sparkle = mix(
+        1.0,
+        smoothstep(0.35, 0.92, sparkleNoise + (normalA.x + normalB.y) * 0.16),
+        clamp(sunGlintSparkle, 0.0, 1.0)
+      );
+      float sunGlint = glintBand * sparkle * max(0.0, sunGlintIntensity);
+      col.rgb += sunGlintColor.rgb * waterLightColor.rgb * sunGlint;
+    #endif
+
     float edgeDistance = min(min(globalUV.x, 1.0 - globalUV.x), min(globalUV.y, 1.0 - globalUV.y));
     float edgeBand = 1.0 - smoothstep(0.0, max(0.001, edgeFoamWidth), edgeDistance);
     float edgeBreakup = mix(1.0, smoothstep(0.2, 0.8, foamNoise), clamp(edgeFoamNoiseAmount, 0.0, 1.0));
@@ -527,6 +545,7 @@ CCProgram unlit-fs %{
       1.0
     );
     col.rgb = mix(col.rgb, foamColor.rgb, foam * foamColor.a);
+  #endif
 
     vec2 D = globalUV - vec2(0.5, 0.5);
     col.rgb = mix(col.rgb, rimColor.rgb, rimColor.a * smoothstep(0.0, 0.3, dot(D, D)));
