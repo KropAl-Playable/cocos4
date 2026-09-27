@@ -18,6 +18,25 @@ The first milestone is intentionally **feasibility-first**:
 3. measure WASM / JS payload and startup cost;
 4. only then expand to joints, ragdolls and vehicle helpers.
 
+## Current port status
+
+First COCOS 4 vertical slice is now on `feat/havok-backend`:
+
+- ✅ pinned `@babylonjs/havok@1.3.14` in package + lockfile;
+- ✅ deterministic runtime sync helper for the ESM factory + WASM;
+- ✅ Creator 3.8.8 `HavokLoader` and typed Web API contract ported;
+- ✅ PAL-based async WASM initialization ported;
+- ✅ isolated `physics-havok` engine feature and `LOAD_HAVOK_MANUALLY` constant;
+- ✅ `PhysicsSystem` manual-load gate extended for Havok;
+- ✅ minimal selector adapter ported: world + rigid body + Box/Sphere/Capsule;
+- ✅ shared-body, handle registry, collision contact bridge and transform-buffer world path ported;
+- ✅ real-WASM smoke harness and body-sync benchmark ported;
+- ⏳ local `npm install` / `npm run build:dev` validation in the COCOS 4 checkout;
+- ⏳ local `npm run test:havok-wasm` validation;
+- ⏳ Creator/browser scene smoke with Havok selected.
+
+No COCOS 4 build/test success is claimed until those local checks run.
+
 ## Existing engine integration point
 
 Cocos already exposes a backend registry through:
