@@ -446,8 +446,7 @@ export class WaterSurface extends Component {
         // Creator may recreate MaterialInstance objects after editor edits/reimports.
         // Runtime water hierarchies are static in v0.1, so avoid periodic hierarchy
         // traversal and allocations there; refreshRenderers() is available explicitly.
-        if (EDITOR || !this._materialInstances.length
-            || this._materialInstances.some((material) => !material || !material.isValid)) {
+        if (EDITOR || !this._materialInstances.length) {
             this._collectMaterials();
             this._applyQuality(true);
         }
