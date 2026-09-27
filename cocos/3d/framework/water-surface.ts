@@ -92,6 +92,12 @@ export interface IWorldWaterSample {
     velocity: Vec3;
 }
 
+export enum WaterQuality {
+    LOW = 0,
+    MEDIUM = 1,
+    HIGH = 2,
+}
+
 /**
  * Authoritative analytical water source for both GPU presentation and CPU gameplay.
  *
@@ -132,6 +138,10 @@ export class WaterSurface extends Component {
     @property
     public syncSceneMainLight = true;
 
+    @property({ type: CCInteger })
+    @range([WaterQuality.LOW, WaterQuality.HIGH, 1])
+    public quality = WaterQuality.HIGH;
+
     @property({ type: Node })
     public debugProbe: Node | null = null;
 
@@ -146,6 +156,7 @@ export class WaterSurface extends Component {
     public debugNormalLength = 0.5;
 
     private _renderers: MeshRenderer[] = [];
+    private _waves: WaterWave[] = [this.wave0, this.wave1, this.wave2, this.wave3];
     private _time = 0;
     private _materialInstances: ReturnType<MeshRenderer['getMaterialInstance']>[] = [];
     private _waveDirAmp: Vec4[] = [new Vec4(), new Vec4(), new Vec4(), new Vec4()];
@@ -160,27 +171,33 @@ export class WaterSurface extends Component {
     private _wakeData: Vec4[] = [new Vec4(), new Vec4(), new Vec4(), new Vec4(), new Vec4()];
     private _wakeIntensities = new Vec4();
     private _wakeIntensity4 = 0;
-    private _materialRefreshCounter = 0;
+    private _appliedQuality = -1;
 
     public get time(): number {
         return this._time;
     }
 
     public get waves(): readonly WaterWave[] {
-        return [this.wave0, this.wave1, this.wave2, this.wave3];
+        this._syncWaveRefs();
+        return this._waves;
     }
 
     protected onEnable(): void {
+        this._syncWaveRefs();
         this._collectRenderers();
         this._collectMaterials();
+        this._applyQuality(true);
         this._uploadWaves();
     }
 
     protected onDisable(): void {
         this._materialInstances.length = 0;
+        this._appliedQuality = -1;
     }
 
     protected update(dt: number): void {
+        this._syncWaveRefs();
+        this._applyQuality();
         if (EDITOR && !this.previewInEditor) {
             this._uploadWaves();
             this._updateDebugProbe();
@@ -189,6 +206,26 @@ export class WaterSurface extends Component {
         this._time += Math.max(0, Math.min(dt, 0.1)) * this.timeScale;
         this._uploadWaves();
         this._updateDebugProbe();
+    }
+
+    public setQuality(quality: WaterQuality): void {
+        const next = Math.max(WaterQuality.LOW, Math.min(WaterQuality.HIGH, Math.floor(quality))) as WaterQuality;
+        if (this.quality === next && this._appliedQuality === next) return;
+        this.quality = next;
+        this._applyQuality(true);
+        this._uploadWaves();
+    }
+
+    /**
+     * Re-scans child renderers/materials and recomputes the global tiled bounds.
+     * Tiled water is expected to be static in v0.1; call this after runtime tile
+     * layout changes instead of paying hierarchy/bounds traversal every frame.
+     */
+    public refreshRenderers(): void {
+        this._collectRenderers();
+        this._collectMaterials();
+        this._applyQuality(true);
+        this._uploadWaves();
     }
 
     /**
@@ -369,10 +406,6 @@ export class WaterSurface extends Component {
             }
         }
 
-        // A newly-created material instance starts from effect defaults. Reapply
-        // component-owned state immediately so editor edits/reimports cannot
-        // silently restore default waves.
-        this._uploadWakes();
     }
 
     private _updateWorldBounds(): void {
@@ -410,12 +443,13 @@ export class WaterSurface extends Component {
     }
 
     private _uploadWaves(): void {
-        // Creator may recreate MaterialInstance objects after editing/reimporting
-        // a material. Cached instances then keep receiving uniforms while the
-        // renderer uses a fresh instance, which looks like a frozen/default wave.
-        // Refresh aggressively in Editor and occasionally at runtime.
-        if (EDITOR || !this._materialInstances.length || (++this._materialRefreshCounter % 120) === 0) {
+        // Creator may recreate MaterialInstance objects after editor edits/reimports.
+        // Runtime water hierarchies are static in v0.1, so avoid periodic hierarchy
+        // traversal and allocations there; refreshRenderers() is available explicitly.
+        if (EDITOR || !this._materialInstances.length
+            || this._materialInstances.some((material) => !material || !material.isValid)) {
             this._collectMaterials();
+            this._applyQuality(true);
         }
 
         const waves = this.waves;
@@ -467,6 +501,35 @@ export class WaterSurface extends Component {
                 if (lightColorHandle) pass.setUniform(lightColorHandle, this._lightColor);
             }
         }
+
+        // Shader recompiles for quality variants reset pass state; keep bounded wake
+        // uniforms component-owned and reapply them after wave/material updates.
+        this._uploadWakes();
+    }
+
+    private _syncWaveRefs(): void {
+        this._waves[0] = this.wave0;
+        this._waves[1] = this.wave1;
+        this._waves[2] = this.wave2;
+        this._waves[3] = this.wave3;
+    }
+
+    private _applyQuality(force = false): void {
+        const quality = Math.max(
+            WaterQuality.LOW,
+            Math.min(WaterQuality.HIGH, Math.floor(this.quality)),
+        ) as WaterQuality;
+        if (!force && quality === this._appliedQuality) return;
+
+        const macros = {
+            WATER_MEDIUM: quality >= WaterQuality.MEDIUM,
+            WATER_HIGH: quality >= WaterQuality.HIGH,
+        };
+        for (const material of this._materialInstances) {
+            if (!material || !material.isValid) continue;
+            material.recompileShaders(macros);
+        }
+        this._appliedQuality = quality;
     }
 
     private _updateMainLight(): void {
