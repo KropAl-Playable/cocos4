@@ -12,6 +12,8 @@ CCEffect %{
         reflectTexture:       { value: white }
         fReflect:             { value: 0.5, editor: { slide: true, range: [0, 1], step: 0.01 } }
         reflectionIntensity:  { value: 1.0, editor: { slide: true, range: [0, 2], step: 0.01 } }
+        reflectionBase:       { value: 0.12, editor: { slide: true, range: [0, 0.5], step: 0.01 } }
+        reflectionContrast:   { value: 1.18, editor: { slide: true, range: [0.5, 2], step: 0.01 } }
         reflectionRoughness:  { value: 0.12, editor: { slide: true, range: [0, 1], step: 0.01 } }
         fresnelPow:           { value: 4.0, editor: { slide: true, range: [0.25, 8], step: 0.05 } }
         glossiness:           { value: 0.88, editor: { slide: true, range: [0, 1], step: 0.01 } }
@@ -20,6 +22,8 @@ CCEffect %{
         sunGlintIntensity:    { value: 0.9, editor: { slide: true, range: [0, 4], step: 0.01 } }
         sunGlintGlossiness:   { value: 0.72, editor: { slide: true, range: [0, 1], step: 0.01 } }
         sunGlintWidth:        { value: 0.45, editor: { slide: true, range: [0.02, 1], step: 0.01 } }
+        sunGlintBandWidth:    { value: 0.35, editor: { slide: true, range: [0.02, 1], step: 0.01 } }
+        sunGlintRotation:     { value: 0.0, editor: { range: [-180, 180], step: 1 } }
         sunGlintSparkle:      { value: 0.55, editor: { slide: true, range: [0, 1], step: 0.01 } }
         sunGlintSparkleScale: { value: 8.0, editor: { slide: true, range: [0.5, 24], step: 0.1 } }
         sunGlintColor:        { value: [1.0, 0.94, 0.82, 1], editor: { type: color } }
@@ -138,6 +142,8 @@ CCProgram water-constants %{
 
     float fReflect;
     float reflectionIntensity;
+    float reflectionBase;
+    float reflectionContrast;
     float reflectionRoughness;
     float fresnelPow;
     float glossiness;
@@ -145,6 +151,8 @@ CCProgram water-constants %{
     float sunGlintIntensity;
     float sunGlintGlossiness;
     float sunGlintWidth;
+    float sunGlintBandWidth;
+    float sunGlintRotation;
     float sunGlintSparkle;
     float sunGlintSparkleScale;
     float waterAlpha;
@@ -411,14 +419,20 @@ CCProgram unlit-fs %{
     vec3 R = reflect(-V, reflectionNormal);
     R.xz += animatedNormal * reflectionDistortion * (1.0 - reflectionRoughness);
     vec4 reflectColor = texture(reflectTexture, normalize(R));
+    reflectColor.rgb = pow(max(reflectColor.rgb, vec3(0.0001)), vec3(max(0.5, reflectionContrast)));
     float fresnel = pow(clamp(1.0 - dot(N, V), 0.0, 1.0), max(0.001, fresnelPow));
 
     vec4 col = mainColor * texture(mainTexture, surfaceUV);
     vec3 tint = mix(shallowColor.rgb, deepColor.rgb, clamp(globalUV.y, 0.0, 1.0));
     col.rgb = mix(col.rgb, tint, depthTintStrength);
 
+    float reflectionFresnel = mix(
+      clamp(reflectionBase, 0.0, 0.5),
+      1.0,
+      fresnel
+    );
     float reflectionWeight = clamp(
-      fReflect * reflectionIntensity * fresnel * fresnelIntensity,
+      fReflect * reflectionIntensity * reflectionFresnel * fresnelIntensity,
       0.0,
       1.0
     );
@@ -450,11 +464,34 @@ CCProgram unlit-fs %{
     vec3 glintHalf = normalize(L + V);
     float glintNdotH = max(dot(glintNormal, glintHalf), 0.0);
     float glintPower = mix(12.0, 384.0, clamp(sunGlintGlossiness, 0.0, 1.0));
-    float glintBand = pow(glintNdotH, glintPower) * max(dot(glintNormal, L), 0.0);
+
+    // Orient the long glint band from the projected main-light direction, then
+    // allow an artist-authored rotation offset relative to the whole water surface.
+    vec2 lightXZ = normalize(L.xz + vec2(0.0001, 0.0));
+    float glintAngle = radians(sunGlintRotation);
+    float glintCos = cos(glintAngle);
+    float glintSin = sin(glintAngle);
+    vec2 glintDir = vec2(
+      lightXZ.x * glintCos - lightXZ.y * glintSin,
+      lightXZ.x * glintSin + lightXZ.y * glintCos
+    );
+    vec2 glintPerp = vec2(-glintDir.y, glintDir.x);
+    vec2 glintDelta = (v_position.xz - waterWorldBounds.xy) / max(waterWorldBounds.zw, vec2(0.0001));
+    float acrossGlint = abs(dot(glintDelta, glintPerp));
+    float directionalBand = 1.0 - smoothstep(
+      max(0.005, sunGlintBandWidth * 0.12),
+      max(0.01, sunGlintBandWidth),
+      acrossGlint
+    );
+
+    float glintBand = pow(glintNdotH, glintPower)
+      * max(dot(glintNormal, L), 0.0)
+      * directionalBand;
     float sparkleNoise = texture(
       noiseTexture,
       surfaceUV * max(0.5, sunGlintSparkleScale)
-        + vec2(cc_time.x * 0.035, -cc_time.x * 0.021)
+        + glintDir * cc_time.x * 0.028
+        + glintPerp * cc_time.x * 0.011
     ).r;
     float sparkle = mix(
       1.0,
