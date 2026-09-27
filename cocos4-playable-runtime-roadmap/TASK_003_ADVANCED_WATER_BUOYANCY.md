@@ -4,6 +4,57 @@
 
 Implement a visually rich but compact water system for playable ads, with a lightweight CPU buoyancy model that matches the visible GPU surface.
 
+## Implementation status
+
+**Task 003 v0.1 functional scope is complete** on `feat/advanced-water-buoyancy`.
+
+Implemented and locally validated:
+
+- ✅ shared bounded 1–4 wave Gerstner evaluator;
+- ✅ analytical displaced position, normal and surface velocity on CPU;
+- ✅ authoritative `cc.WaterSurface` component with four serializable wave definitions;
+- ✅ component-owned time shared with the material instead of relying on GPU-only clock state;
+- ✅ isolated `advanced/playable-water.effect` fork; stock Advanced Water remains untouched;
+- ✅ analytical GPU vertex displacement and large-wave normal reconstruction using the same equations;
+- ✅ WebGL-friendly fixed four-wave uniform layout;
+- ✅ zero per-vertex CPU work and no allocation in the steady-state CPU sampling path;
+- ✅ first unit-test coverage for the shared wave convention;
+- ✅ bounded Stokes-like crest sharpening shared by CPU and GPU;
+- ✅ analytical crest-foam signal based on wave phase/energy/steepness with noise breakup.
+
+Next gates:
+
+- ✅ local Creator 3.8.8 compile/render validation of `playable-water.effect`;
+- ✅ local validation/tuning of crest sharpening and crest foam;
+- ✅ CPU-vs-GPU surface agreement marker/debug visualization;
+- ✅ 4-point `WaterBuoyancy` prototype with dynamic RigidBody integration;
+- ✅ world-space sampling compensates Gerstner horizontal displacement with a bounded inverse solve;
+- ✅ bounded five-source wake API wired to the stylized water shader;
+- ✅ WaterSurface now rebinds component-owned wave state after Editor material recreation/reimport;
+- ✅ nested WaterWave authoring data uses a browser-safe constructor-free serializable shape;
+- ✅ one WaterSurface can drive all child MeshRenderers for tiled water fields;
+- ✅ analytical waves are evaluated in world space, so adjacent translated tiles share one seamless phase field;
+- ✅ browser validation of persisted custom wave values after the serialization fix;
+- ✅ material detail/foam/main mapping moved to world space for seamless tiled water;
+- ✅ rim/edge-foam/static-wake bounds now use the full WaterSurface tile group instead of per-mesh UVs;
+- ✅ speed-driven `WaterWakeSource` component for one of five bounded wake slots;
+- ✅ glossy cubemap reflection controls with WebGL1-friendly roughness approximation;
+- ✅ direct specular/gloss controls and scene main-light synchronization;
+- ✅ optional sun/moon glint path with tunable width, glossiness and sparkle breakup;
+- ✅ cubemap readability controls extended with non-grazing base reflection and contrast shaping;
+- ✅ sun/moon glint band auto-orients from main-light projection with artist rotation offset;
+- ✅ local validation/tuning of glossy reflection and glint shading;
+- ✅ formal LOW / MEDIUM / HIGH shader quality variants controlled by `WaterSurface.quality`;
+- ✅ runtime `setQuality()` API; quality affects fragment presentation only and keeps the shared CPU/GPU gameplay wave surface unchanged;
+- ✅ LOW removes cubemap/foam/wake/glint work and keeps one detail-normal layer + cheap Fresnel/specular;
+- ✅ MEDIUM enables dual detail normals, cubemap reflection, foam/crest foam and two wake sources;
+- ✅ HIGH enables the full five-source wake path and sun/moon glint;
+- ✅ steady-state cleanup: WaterSurface no longer allocates a wave array every sample/update and no longer performs periodic runtime hierarchy/material rescans;
+- ✅ local shader-compile/browser validation for all three quality variants;
+- ✅ tiled surface/material continuity, glossy reflection, directional glint and wake behavior validated in Creator/browser;
+- ✅ v0.1 code-side performance cleanup complete;
+- ⏳ external benchmark tail only: target-device FPS/GPU timing, compressed build-size delta, Safari/iPhone and Android WebView checks where available.
+
 The key requirement is:
 
 > **one wave definition, two consumers**
@@ -135,19 +186,29 @@ Responsible for:
 
 ~~~text
 LOW
-- 2 gameplay waves
-- analytical normal
-- simple Fresnel/specular
+- same gameplay wave surface as higher tiers
+- one detail-normal texture
+- cheap Fresnel/specular
+- no cubemap sample
+- no foam/wakes/glint
 
 MEDIUM
-- 3–4 gameplay waves
-- one visual ripple/detail layer
-- foam/wake
+- same gameplay wave surface
+- dual detail normals
+- cubemap reflection
+- foam + analytical crest foam
+- up to 2 dynamic wake sources
 
-HIGH / optional
-- richer normal/detail
-- extra reflection/refraction features
+HIGH
+- same gameplay wave surface
+- full reflection/gloss stack
+- full 5-source dynamic wakes
+- sun/moon directional glint + sparkle breakup
 ~~~
+
+Quality variants are shader compile variants. They intentionally do **not** reduce or alter the
+analytical gameplay wave count, because CPU sampling/buoyancy must remain identical to the
+visible large-scale geometry when quality changes.
 
 Quality tiers must not change the CPU buoyancy surface.
 
@@ -332,6 +393,18 @@ CPU height should track the rendered low-frequency surface closely.
 - 30 bodies where practical;
 - Safari/iPhone;
 - Android WebView when available.
+
+## v0.1 closure
+
+The implementation/authoring scope is complete. Remaining work is benchmark/regression evidence rather than feature development:
+
+- record 1 / 4 / 9 tile performance for LOW / MEDIUM / HIGH;
+- record 1 / 5 wake-source performance;
+- record 1 / 10 buoyancy-body CPU cost where practical;
+- record build-size delta for the effect/components;
+- validate Safari/iPhone and Android WebView when representative hardware is available.
+
+These measurements remain important for promotion into a production preset, but they do not block starting Task 004.
 
 ## Acceptance criteria
 
