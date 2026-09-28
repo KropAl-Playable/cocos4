@@ -55,6 +55,8 @@ game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
             ccd: true,
             restitution: true,
             materialCombineModes: false,
+            customInertia: false,
+            velocityLimits: true,
         },
         PhysicsWorld: BulletWorld,
         RigidBody: BulletRigidBody,
