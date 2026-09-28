@@ -18,6 +18,13 @@ import { waitForHavokInstantiation } from './instantiated';
 
 game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
     selector.register('havok', {
+        capabilities: {
+            centerOfMass: true,
+            gravityScale: true,
+            axisLocks: true,
+            ccd: false,
+            restitution: true,
+        },
         PhysicsWorld: HavokWorld,
         RigidBody: HavokRigidBody,
         BoxShape: HavokBoxShape,
