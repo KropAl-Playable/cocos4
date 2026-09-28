@@ -24,6 +24,10 @@ export interface PhysicsBackendCapabilities {
      * Collider/material restitution support.
      */
     restitution: boolean;
+    /**
+     * Independent friction/restitution combine modes.
+     */
+    materialCombineModes: boolean;
 }
 
 export const DEFAULT_PHYSICS_BACKEND_CAPABILITIES: Readonly<PhysicsBackendCapabilities> = {
@@ -32,4 +36,5 @@ export const DEFAULT_PHYSICS_BACKEND_CAPABILITIES: Readonly<PhysicsBackendCapabi
     axisLocks: false,
     ccd: false,
     restitution: true,
+    materialCombineModes: false,
 };
