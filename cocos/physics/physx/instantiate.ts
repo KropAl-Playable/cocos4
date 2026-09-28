@@ -51,6 +51,13 @@ import { PhysicsSystem } from '../framework/physics-system';
 
 game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
     selector.register('physx', {
+        capabilities: {
+            centerOfMass: false,
+            gravityScale: false,
+            axisLocks: true,
+            ccd: true,
+            restitution: true,
+        },
         PhysicsWorld: PhysXWorld,
         RigidBody: PhysXRigidBody,
 
