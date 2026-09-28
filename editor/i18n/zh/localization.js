@@ -943,6 +943,10 @@ module.exports = link(mixin({
             label: "基于 Bullet 的物理系统",
             description: "基于 Bullet 的物理系统支持。",
         },
+        physics_havok: {
+            label: "基于 Havok 的物理系统",
+            description: "基于独立 Havok WASM 运行时的 Web 物理系统。",
+        },
         physics_physx: {
             label: "基于 PhysX 的物理系统",
             description: "基于 PhysX 的物理系统支持。",
@@ -1134,6 +1138,12 @@ module.exports = link(mixin({
                 loadManual: {
                     label: '手动加载',
                     description: `是否通过 'loadWasmModulePhysX' API 手动加载 PhysX Wasm/AsmJS 模块 ?`,
+                },
+            },
+            havok: {
+                loadManual: {
+                    label: '手动加载',
+                    description: `是否通过 'loadWasmModuleHavok' API 手动加载 Havok WASM 模块 ?`,
                 },
             },
         },
