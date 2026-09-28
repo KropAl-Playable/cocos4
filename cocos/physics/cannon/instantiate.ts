@@ -43,6 +43,13 @@ import { Game, game } from '../../game';
 
 game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
     selector.register('cannon.js', {
+        capabilities: {
+            centerOfMass: false,
+            gravityScale: false,
+            axisLocks: true,
+            ccd: true,
+            restitution: true,
+        },
         PhysicsWorld: CannonWorld,
         RigidBody: CannonRigidBody,
 
