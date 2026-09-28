@@ -12,7 +12,9 @@ import { HavokRigidBody } from './havok-rigid-body';
 import {
     HavokBoxShape,
     HavokCapsuleShape,
+    HavokCylinderShape,
     HavokSphereShape,
+    HavokTrimeshShape,
 } from './shapes/havok-shape';
 import { waitForHavokInstantiation } from './instantiated';
 
@@ -33,6 +35,8 @@ game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
         BoxShape: HavokBoxShape,
         SphereShape: HavokSphereShape,
         CapsuleShape: HavokCapsuleShape,
+        CylinderShape: HavokCylinderShape,
+        TrimeshShape: HavokTrimeshShape,
     });
 });
 
