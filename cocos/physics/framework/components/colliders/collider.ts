@@ -139,12 +139,12 @@ export class Collider extends Eventify(Component) {
     }
 
     /**
-     * @en Convenience access to this collider's restitution. Writing creates a
-     * local PhysicsMaterial instance when needed, so shared assets are not mutated.
-     * @zh 碰撞体回弹系数便捷属性；写入时按需创建本地物理材质实例。
+     * @en Runtime convenience alias for this collider's restitution. PhysicsMaterial
+     * remains the authoritative Inspector value; writing this alias creates a local
+     * material instance so shared assets are not mutated.
+     * @zh 碰撞体 restitution 的运行时便捷别名。Inspector 以 PhysicsMaterial 为准；
+     * 写入该别名时会创建本地材质实例，避免修改共享资源。
      */
-    @displayOrder(-0.8)
-    @tooltip('i18n:physics3d.collider.bounciness')
     public get bounciness (): number {
         return this._material?.restitution ?? 0;
     }
@@ -155,11 +155,9 @@ export class Collider extends Eventify(Component) {
     }
 
     /**
-     * @en Convenience access to this collider's friction.
-     * @zh 碰撞体摩擦系数便捷属性。
+     * @en Runtime convenience alias for this collider's friction.
+     * @zh 碰撞体摩擦系数的运行时便捷别名；Inspector 以 PhysicsMaterial 为准。
      */
-    @displayOrder(-0.7)
-    @tooltip('i18n:physics3d.collider.friction')
     public get friction (): number {
         return this._material?.friction ?? 0.6;
     }
