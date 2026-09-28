@@ -116,6 +116,14 @@ export class CannonRigidBody implements IRigidBody {
         this.impl.force.z += gravity.z * scaledMass;
     }
 
+    setMaxLinearVelocity (value: number): void { this._maxLinearVelocity = Math.max(0, value); }
+    setMaxAngularVelocity (value: number): void { this._maxAngularVelocity = Math.max(0, value); }
+
+    afterStep (): void {
+        this._clampVelocity(this.impl.velocity, this._maxLinearVelocity);
+        this._clampVelocity(this.impl.angularVelocity, this._maxAngularVelocity);
+    }
+
     useCCD (value: boolean): void {
         this.impl.ccdSpeedThreshold = value ? 0.01 : -1;
     }
@@ -160,6 +168,8 @@ export class CannonRigidBody implements IRigidBody {
 
     private _isEnabled = false;
     private _gravityScale = 1;
+    private _maxLinearVelocity = 0;
+    private _maxAngularVelocity = 0;
 
     /** LIFECYCLE */
 
@@ -331,6 +341,15 @@ export class CannonRigidBody implements IRigidBody {
     removeMask (v: number): void {
         this.impl.collisionFilterMask &= ~v;
         this._wakeUpIfSleep();
+    }
+
+    private _clampVelocity (value: CANNON.Vec3, maximum: number): void {
+        if (maximum <= 0) return;
+        const lengthSq = value.x * value.x + value.y * value.y + value.z * value.z;
+        const maxSq = maximum * maximum;
+        if (lengthSq <= maxSq || lengthSq <= 0) return;
+        const scale = maximum / Math.sqrt(lengthSq);
+        value.x *= scale; value.y *= scale; value.z *= scale;
     }
 
     protected _wakeUpIfSleep (): void {
