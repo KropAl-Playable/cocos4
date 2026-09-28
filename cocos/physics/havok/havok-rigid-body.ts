@@ -7,13 +7,11 @@ import { IVec3Like, Quat, Vec3 } from '../../core';
 import { ERigidBodyType, PhysicsSystem, RigidBody } from '../framework';
 import type { IRigidBody } from '../spec/i-rigid-body';
 import { HavokSharedBody } from './havok-shared-body';
-import type { HavokBodyId, HavokConstraintId, HavokMassProperties, HavokModule, HavokResult, HavokVector3 } from './havok-types';
+import type { HavokBodyId, HavokMassProperties, HavokModule, HavokResult, HavokVector3 } from './havok-types';
 import { assertHavokResult, fromHavokVector3, toHavokVector3 } from './havok-util';
 import type { HavokWorld } from './havok-world';
 
 const MIN_MASS = 0.000001;
-const HAVOK_ZERO_ID = (globalThis as unknown as { BigInt: (value: number) => bigint }).BigInt(0);
-const HAVOK_FIXED_BODY: HavokBodyId = [HAVOK_ZERO_ID];
 
 export class HavokRigidBody implements IRigidBody {
     get impl (): HavokBodyId { return this._sharedBody.bodyId; }
@@ -41,7 +39,6 @@ export class HavokRigidBody implements IRigidBody {
     private readonly _inertiaTensorRotation = new Quat();
     private _maxLinearVelocity = 0;
     private _maxAngularVelocity = 0;
-    private _axisLockConstraint: HavokConstraintId | null = null;
     private readonly _linearFactor = new Vec3(1, 1, 1);
     private readonly _angularFactor = new Vec3(1, 1, 1);
     private readonly _pendingForce = new Vec3();
@@ -50,12 +47,6 @@ export class HavokRigidBody implements IRigidBody {
     private readonly _v1: HavokVector3 = [0, 0, 0];
     private readonly _temp0 = new Vec3();
     private readonly _temp1 = new Vec3();
-    private readonly _lockPivotParent: HavokVector3 = [0, 0, 0];
-    private readonly _lockPivotWorld: HavokVector3 = [0, 0, 0];
-    private readonly _lockAxisXParent: HavokVector3 = [1, 0, 0];
-    private readonly _lockAxisYParent: HavokVector3 = [0, 1, 0];
-    private readonly _lockAxisXWorld: HavokVector3 = [1, 0, 0];
-    private readonly _lockAxisYWorld: HavokVector3 = [0, 1, 0];
 
     initialize (component: RigidBody): void {
         this._rigidBody = component;
@@ -80,16 +71,12 @@ export class HavokRigidBody implements IRigidBody {
 
     onDisable (): void { this.sleep(); }
     onDestroy (): void {
-        this._destroyAxisLockConstraint();
         this._sharedBody.reference = false;
         (this._rigidBody as any) = null;
         (this._sharedBody as any) = null;
     }
 
-    setType (value: ERigidBodyType): void {
-        this._sharedBody.setType(value);
-        this._rebuildAxisLockConstraint();
-    }
+    setType (value: ERigidBodyType): void { this._sharedBody.setType(value); }
     setMass (value: number): void { this._mass = Math.max(MIN_MASS, value); this.reapplyMassProperties(); }
     setLinearDamping (value: number): void { this._check(this._instance.HP_Body_SetLinearDamping(this.impl, value), 'HP_Body_SetLinearDamping'); }
     setAngularDamping (value: number): void { this._check(this._instance.HP_Body_SetAngularDamping(this.impl, value), 'HP_Body_SetAngularDamping'); }
@@ -124,14 +111,8 @@ export class HavokRigidBody implements IRigidBody {
     }
     setMaxLinearVelocity (value: number): void { this._maxLinearVelocity = Math.max(0, value); }
     setMaxAngularVelocity (value: number): void { this._maxAngularVelocity = Math.max(0, value); }
-    setLinearFactor (value: IVec3Like): void {
-        Vec3.copy(this._linearFactor, value);
-        this._rebuildAxisLockConstraint();
-    }
-    setAngularFactor (value: IVec3Like): void {
-        Vec3.copy(this._angularFactor, value);
-        this._rebuildAxisLockConstraint();
-    }
+    setLinearFactor (value: IVec3Like): void { Vec3.copy(this._linearFactor, value); }
+    setAngularFactor (value: IVec3Like): void { Vec3.copy(this._angularFactor, value); }
     setAllowSleep (value: boolean): void {
         this._allowSleep = value;
         const control = value ? this._instance.ActivationControl.SIMULATION_CONTROLLED : this._instance.ActivationControl.ALWAYS_ACTIVE;
@@ -305,64 +286,6 @@ export class HavokRigidBody implements IRigidBody {
             ? this._instance.HP_Body_SetAngularVelocity(this.impl, velocity)
             : this._instance.HP_Body_SetLinearVelocity(this.impl, velocity);
         this._check(setResult, angular ? 'HP_Body_SetAngularVelocity' : 'HP_Body_SetLinearVelocity');
-    }
-
-    private _rebuildAxisLockConstraint (): void {
-        this._destroyAxisLockConstraint();
-        if (!this._sharedBody || this._rigidBody.type !== ERigidBodyType.DYNAMIC) return;
-        const lockLinear = [this._linearFactor.x === 0, this._linearFactor.y === 0, this._linearFactor.z === 0];
-        const lockAngular = [this._angularFactor.x === 0, this._angularFactor.y === 0, this._angularFactor.z === 0];
-        if (!lockLinear[0] && !lockLinear[1] && !lockLinear[2] && !lockAngular[0] && !lockAngular[1] && !lockAngular[2]) return;
-
-        const [result, constraint] = this._instance.HP_Constraint_Create();
-        this._check(result, 'HP_Constraint_Create(axis lock)');
-        this._axisLockConstraint = constraint;
-        this._check(this._instance.HP_Constraint_SetParentBody(constraint, this.impl), 'HP_Constraint_SetParentBody(axis lock)');
-        this._check(this._instance.HP_Constraint_SetChildBody(constraint, HAVOK_FIXED_BODY), 'HP_Constraint_SetChildBody(axis lock)');
-
-        const position = this._rigidBody.node.worldPosition;
-        this._lockPivotWorld[0] = position.x; this._lockPivotWorld[1] = position.y; this._lockPivotWorld[2] = position.z;
-        Vec3.transformQuat(this._temp0, Vec3.UNIT_X, this._rigidBody.node.worldRotation);
-        Vec3.transformQuat(this._temp1, Vec3.UNIT_Y, this._rigidBody.node.worldRotation);
-        this._lockAxisXWorld[0] = this._temp0.x; this._lockAxisXWorld[1] = this._temp0.y; this._lockAxisXWorld[2] = this._temp0.z;
-        this._lockAxisYWorld[0] = this._temp1.x; this._lockAxisYWorld[1] = this._temp1.y; this._lockAxisYWorld[2] = this._temp1.z;
-        this._check(
-            this._instance.HP_Constraint_SetAnchorInParent(
-                constraint,
-                this._lockPivotParent,
-                this._lockAxisXParent,
-                this._lockAxisYParent,
-            ),
-            'HP_Constraint_SetAnchorInParent(axis lock)',
-        );
-        this._check(
-            this._instance.HP_Constraint_SetAnchorInChild(
-                constraint,
-                this._lockPivotWorld,
-                this._lockAxisXWorld,
-                this._lockAxisYWorld,
-            ),
-            'HP_Constraint_SetAnchorInChild(axis lock)',
-        );
-
-        const free = this._instance.ConstraintAxisLimitMode.FREE;
-        const locked = this._instance.ConstraintAxisLimitMode.LOCKED;
-        for (let axis = 0; axis < 6; axis++) {
-            const shouldLock = axis < 3 ? lockLinear[axis] : lockAngular[axis - 3];
-            this._check(
-                this._instance.HP_Constraint_SetAxisMode(constraint, axis, shouldLock ? locked : free),
-                'HP_Constraint_SetAxisMode(axis lock)',
-            );
-        }
-        this._check(this._instance.HP_Constraint_SetCollisionsEnabled(constraint, 1), 'HP_Constraint_SetCollisionsEnabled(axis lock)');
-        this._check(this._instance.HP_Constraint_SetEnabled(constraint, 1), 'HP_Constraint_SetEnabled(axis lock)');
-    }
-
-    private _destroyAxisLockConstraint (): void {
-        if (!this._axisLockConstraint || !this._instance) return;
-        this._instance.HP_Constraint_SetEnabled(this._axisLockConstraint, 0);
-        this._check(this._instance.HP_Constraint_Release(this._axisLockConstraint), 'HP_Constraint_Release(axis lock)');
-        this._axisLockConstraint = null;
     }
 
     private _check (result: HavokResult, operation: string): void { assertHavokResult(this._instance, result, operation); }
