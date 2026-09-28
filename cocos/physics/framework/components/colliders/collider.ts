@@ -139,6 +139,37 @@ export class Collider extends Eventify(Component) {
     }
 
     /**
+     * @en Convenience access to this collider's restitution. Writing creates a
+     * local PhysicsMaterial instance when needed, so shared assets are not mutated.
+     * @zh 碰撞体回弹系数便捷属性；写入时按需创建本地物理材质实例。
+     */
+    @displayOrder(-0.8)
+    @tooltip('i18n:physics3d.collider.bounciness')
+    public get bounciness (): number {
+        return this._material?.restitution ?? 0;
+    }
+
+    public set bounciness (value: number) {
+        const material = this._ensureLocalMaterial();
+        material.restitution = Math.max(0, Math.min(1, value));
+    }
+
+    /**
+     * @en Convenience access to this collider's friction.
+     * @zh 碰撞体摩擦系数便捷属性。
+     */
+    @displayOrder(-0.7)
+    @tooltip('i18n:physics3d.collider.friction')
+    public get friction (): number {
+        return this._material?.friction ?? 0.6;
+    }
+
+    public set friction (value: number) {
+        const material = this._ensureLocalMaterial();
+        material.friction = Math.max(0, value);
+    }
+
+    /**
      * @en
      * Gets or sets the collider is trigger, this will be always trigger if using builtin.
      * @zh
@@ -447,6 +478,15 @@ export class Collider extends Eventify(Component) {
             this._shape.onDestroy!();
         }
         if (this._boundingSphere) this._boundingSphere.destroy();
+    }
+
+    private _ensureLocalMaterial (): PhysicsMaterial {
+        let material = this.material;
+        if (!material) {
+            material = new PhysicsMaterial();
+            this.material = material;
+        }
+        return material;
     }
 
     private _updateMaterial (): void {
