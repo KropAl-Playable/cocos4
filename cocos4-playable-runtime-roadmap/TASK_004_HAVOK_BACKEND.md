@@ -216,6 +216,29 @@ Current implementation on `feat/havok-backend`:
 The API should exist at the framework level even when a backend cannot implement a feature exactly.
 Backend capability metadata is used to distinguish exact support from fallback behavior.
 
+### 4.2 second-pass validation
+
+Recommended Creator smoke:
+
+~~~text
+Axis locks
+  Freeze Position X only -> impacts may move Y/Z but not X
+  Freeze Rotation X/Z -> collision torque should still rotate Y only
+  Toggle locks at runtime -> constraint should rebuild from current pose
+
+Velocity limits
+  maxLinearVelocity = 2
+  maxAngularVelocity = 1
+  apply large impulses and verify post-solve clamping
+
+Custom inertia
+  automaticInertiaTensor = false
+  compare (1,1,1) against strongly biased tensors such as (0.2,4,4)
+  verify rotation response changes without changing mass or COM
+~~~
+
+No automated-test pass is claimed for this second pass until the local engine/Creator checks run.
+
 ### 4.2 design rule
 
 Do not silently pretend every backend has identical capabilities. Prefer:
