@@ -192,9 +192,8 @@ Current implementation on `feat/havok-backend`:
 - ✅ backend capability metadata contract;
 - ✅ serialized `RigidBody.gravityScale`;
 - ✅ serialized `automaticCenterOfMass` + `centerOfMass`;
-- ✅ serialized freeze-position X/Y/Z controls;
-- ✅ serialized freeze-rotation X/Y/Z controls + `freezeRotation` convenience switch;
-- ✅ existing `linearFactor` / `angularFactor` remain available as lower-level controls;
+- ⏸ freeze-position / freeze-rotation controls are retained only as hidden serialized/runtime API for compatibility; Creator smoke showed no observable solver effect in the Havok path;
+- ⏸ Havok `linearFactor` / `angularFactor` currently act only as input-side masks in the adapter and do not constrain collision-solver response; exact axis locking is moved to backlog;
 - ✅ `sleepThreshold` and `useCCD` are now serialized/Inspector-authorable;
 - ✅ Havok native gravity factor support;
 - ✅ Havok custom center-of-mass support through mass properties;
@@ -238,6 +237,16 @@ Custom inertia
 ~~~
 
 No automated-test pass is claimed for this second pass until the local engine/Creator checks run.
+
+### Axis-lock backlog
+
+Do not spend more Task 004.2 time on freeze-axis authoring. Revisit only when one of these is available and validated:
+
+- a Havok body/motion-property API that exposes native locked degrees of freedom;
+- a proven constraint configuration whose axes are expressed correctly for the fixed-world body and demonstrably constrains contact-solver response;
+- a cross-backend contract that distinguishes true solver locks from input-side velocity/force factors.
+
+Until then, Freeze Position / Freeze Rotation stay hidden in the Inspector, Havok reports `axisLocks=false`, and legacy Linear/Angular Factor remain unchanged.
 
 ### 4.2 design rule
 
