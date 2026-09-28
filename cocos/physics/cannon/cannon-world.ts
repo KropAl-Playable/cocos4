@@ -184,6 +184,9 @@ export class CannonWorld implements IPhysicsWorld {
             this.bodies[i].wrappedBody?.beforeStep();
         }
         this._world.step(deltaTime, timeSinceLastCalled, maxSubStep);
+        for (let i = 0; i < this.bodies.length; i++) {
+            this.bodies[i].wrappedBody?.afterStep();
+        }
 
         // sync physics to scene
         for (let i = 0; i < this.bodies.length; i++) {
