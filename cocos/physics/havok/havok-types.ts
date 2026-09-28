@@ -74,6 +74,10 @@ export interface HavokModule {
     };
     readonly MaterialCombine: {
         readonly GEOMETRIC_MEAN: number;
+        readonly MINIMUM: number;
+        readonly MAXIMUM: number;
+        readonly ARITHMETIC_MEAN: number;
+        readonly MULTIPLY: number;
     };
     readonly HEAPF32: Float32Array;
     readonly HEAPU8: Uint8Array;
