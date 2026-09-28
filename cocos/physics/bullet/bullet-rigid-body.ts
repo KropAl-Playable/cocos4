@@ -74,15 +74,22 @@ export class BulletRigidBody implements IRigidBody {
     }
 
     useGravity (value: boolean): void {
+        this.setGravityScale(value ? 1 : 0);
+    }
+
+    setGravityScale (value: number): void {
         if (!this._rigidBody.isDynamic) return;
-        let m_rigidBodyFlag = bt.RigidBody_getFlags(this.impl);
-        if (value) {
-            m_rigidBodyFlag &= (~btRigidBodyFlags.BT_DISABLE_WORLD_GRAVITY);
+        let rigidBodyFlag = bt.RigidBody_getFlags(this.impl);
+        if (value === 1) {
+            rigidBodyFlag &= (~btRigidBodyFlags.BT_DISABLE_WORLD_GRAVITY);
         } else {
-            bt.RigidBody_setGravity(this.impl, cocos2BulletVec3(BulletCache.instance.BT_V3_0, Vec3.ZERO));
-            m_rigidBodyFlag |= btRigidBodyFlags.BT_DISABLE_WORLD_GRAVITY;
+            const gravity = PhysicsSystem.instance.gravity;
+            const scaledGravity = BulletCache.instance.CCT_V3_0;
+            scaledGravity.set(gravity.x * value, gravity.y * value, gravity.z * value);
+            bt.RigidBody_setGravity(this.impl, cocos2BulletVec3(BulletCache.instance.BT_V3_0, scaledGravity));
+            rigidBodyFlag |= btRigidBodyFlags.BT_DISABLE_WORLD_GRAVITY;
         }
-        bt.RigidBody_setFlags(this.impl, m_rigidBodyFlag);
+        bt.RigidBody_setFlags(this.impl, rigidBodyFlag);
         this._wakeUpIfSleep();
         this._sharedBody.dirty |= EBtSharedBodyDirty.BODY_RE_ADD;
     }
