@@ -28,6 +28,14 @@ export interface PhysicsBackendCapabilities {
      * Independent friction/restitution combine modes.
      */
     materialCombineModes: boolean;
+    /**
+     * Custom inertia tensor and tensor rotation.
+     */
+    customInertia: boolean;
+    /**
+     * Per-body linear/angular velocity limits.
+     */
+    velocityLimits: boolean;
 }
 
 export const DEFAULT_PHYSICS_BACKEND_CAPABILITIES: Readonly<PhysicsBackendCapabilities> = {
@@ -37,4 +45,6 @@ export const DEFAULT_PHYSICS_BACKEND_CAPABILITIES: Readonly<PhysicsBackendCapabi
     ccd: false,
     restitution: true,
     materialCombineModes: false,
+    customInertia: false,
+    velocityLimits: false,
 };
