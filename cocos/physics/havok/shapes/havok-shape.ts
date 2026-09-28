@@ -88,9 +88,18 @@ export abstract class HavokShape implements IBaseShape {
     setMaterial (value: PhysicsMaterial | null): void {
         if (!this._impl) return;
         const material = value || PhysicsSystem.instance.defaultMaterial;
-        const combine = this._instance.MaterialCombine.GEOMETRIC_MEAN;
+        const frictionCombine = this._instance.MaterialCombine.GEOMETRIC_MEAN;
+        // GEOMETRIC_MEAN is a poor default for restitution: a common static floor
+        // has restitution=0, which collapses any dynamic body's bounce to zero.
+        // ARITHMETIC_MEAN matches the expected "bouncy object on ordinary floor"
+        // authoring behavior until explicit per-material combine modes are exposed.
+        const restitutionCombine = this._instance.MaterialCombine.ARITHMETIC_MEAN;
         assertHavokResult(this._instance, this._instance.HP_Shape_SetMaterial(this._impl, [
-            material.friction, material.friction, material.restitution, combine, combine,
+            material.friction,
+            material.friction,
+            material.restitution,
+            frictionCombine,
+            restitutionCombine,
         ]), 'HP_Shape_SetMaterial');
     }
     setAsTrigger (value: boolean): void {
