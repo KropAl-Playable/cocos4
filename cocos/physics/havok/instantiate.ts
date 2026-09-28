@@ -24,6 +24,7 @@ game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
             axisLocks: false,
             ccd: false,
             restitution: true,
+            materialCombineModes: true,
         },
         PhysicsWorld: HavokWorld,
         RigidBody: HavokRigidBody,
