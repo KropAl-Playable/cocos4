@@ -30,6 +30,11 @@ import type {
 import { assertHavokResult, isHavokResultOk, toHavokVector3 } from './havok-util';
 import type { HavokShape } from './shapes/havok-shape';
 
+// Keep the engine ES2015 runtime target while using Havok's bigint handles.
+// Access BigInt through a structural globalThis cast so declaration generation
+// does not require the ES2020 lib solely for the BigInt constructor symbol.
+const HAVOK_ZERO_ID = (globalThis as unknown as { BigInt: (value: number) => bigint }).BigInt(0);
+
 const QUERY_COLLECTOR_CAPACITY = 256;
 
 export interface IHavokBodySync {
@@ -91,8 +96,8 @@ export class HavokWorld implements IPhysicsWorld {
     private readonly _queryRotation: HavokQuaternion = [0, 0, 0, 1];
     private readonly _queryPoint = new Vec3();
     private readonly _queryNormal = new Vec3();
-    private readonly _ignoredBody: HavokBodyId = [BigInt(0)];
-    private readonly _emptyShape: HavokShapeId = [BigInt(0)];
+    private readonly _ignoredBody: HavokBodyId = [HAVOK_ZERO_ID];
+    private readonly _emptyShape: HavokShapeId = [HAVOK_ZERO_ID];
     private readonly _queryFilter: HavokFilterInfo = [0xffffffff, 0xffffffff];
     private readonly _rayCastInput: HavokRayCastInput = [
         this._queryStart, this._queryEnd, this._queryFilter, false, this._ignoredBody,
