@@ -29,7 +29,7 @@ export interface PhysicsBackendCapabilities {
 export const DEFAULT_PHYSICS_BACKEND_CAPABILITIES: Readonly<PhysicsBackendCapabilities> = {
     centerOfMass: false,
     gravityScale: false,
-    axisLocks: true,
+    axisLocks: false,
     ccd: false,
     restitution: true,
 };
