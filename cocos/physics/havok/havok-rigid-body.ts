@@ -32,6 +32,8 @@ export class HavokRigidBody implements IRigidBody {
     private _sleepThreshold = 0.1;
     private _usingCCD = false;
     private _allowSleep = true;
+    private _automaticCenterOfMass = true;
+    private readonly _centerOfMass = new Vec3();
     private readonly _linearFactor = new Vec3(1, 1, 1);
     private readonly _angularFactor = new Vec3(1, 1, 1);
     private readonly _pendingForce = new Vec3();
@@ -73,7 +75,18 @@ export class HavokRigidBody implements IRigidBody {
     setMass (value: number): void { this._mass = Math.max(MIN_MASS, value); this.reapplyMassProperties(); }
     setLinearDamping (value: number): void { this._check(this._instance.HP_Body_SetLinearDamping(this.impl, value), 'HP_Body_SetLinearDamping'); }
     setAngularDamping (value: number): void { this._check(this._instance.HP_Body_SetAngularDamping(this.impl, value), 'HP_Body_SetAngularDamping'); }
-    useGravity (value: boolean): void { this._check(this._instance.HP_Body_SetGravityFactor(this.impl, value ? 1 : 0), 'HP_Body_SetGravityFactor'); }
+    useGravity (value: boolean): void { this.setGravityScale(value ? 1 : 0); }
+    setGravityScale (value: number): void {
+        this._check(this._instance.HP_Body_SetGravityFactor(this.impl, value), 'HP_Body_SetGravityFactor');
+    }
+    setAutomaticCenterOfMass (value: boolean): void {
+        this._automaticCenterOfMass = value;
+        this.reapplyMassProperties();
+    }
+    setCenterOfMass (value: IVec3Like): void {
+        Vec3.copy(this._centerOfMass, value);
+        if (!this._automaticCenterOfMass) this.reapplyMassProperties();
+    }
     setLinearFactor (value: IVec3Like): void { Vec3.copy(this._linearFactor, value); }
     setAngularFactor (value: IVec3Like): void { Vec3.copy(this._angularFactor, value); }
     setAllowSleep (value: boolean): void {
@@ -189,6 +202,11 @@ export class HavokRigidBody implements IRigidBody {
         this._check(result, 'HP_Shape_BuildMassProperties');
         const massProperties: HavokMassProperties = properties;
         massProperties[1] = this._mass;
+        if (!this._automaticCenterOfMass) {
+            massProperties[0][0] = this._centerOfMass.x;
+            massProperties[0][1] = this._centerOfMass.y;
+            massProperties[0][2] = this._centerOfMass.z;
+        }
         this._check(this._instance.HP_Body_SetMassProperties(this.impl, massProperties), 'HP_Body_SetMassProperties');
     }
 
