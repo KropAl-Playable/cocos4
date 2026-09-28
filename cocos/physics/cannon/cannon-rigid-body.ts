@@ -98,8 +98,22 @@ export class CannonRigidBody implements IRigidBody {
     }
 
     useGravity (value: boolean): void {
-        this.impl.useGravity = value;
+        this.setGravityScale(value ? 1 : 0);
+    }
+
+    setGravityScale (value: number): void {
+        this._gravityScale = value;
+        this.impl.useGravity = value === 1;
         this._wakeUpIfSleep();
+    }
+
+    beforeStep (): void {
+        if (this.impl.type !== CANNON.Body.DYNAMIC || this._gravityScale === 0 || this._gravityScale === 1) return;
+        const gravity = PhysicsSystem.instance.gravity;
+        const scaledMass = this.impl.mass * this._gravityScale;
+        this.impl.force.x += gravity.x * scaledMass;
+        this.impl.force.y += gravity.y * scaledMass;
+        this.impl.force.z += gravity.z * scaledMass;
     }
 
     useCCD (value: boolean): void {
@@ -145,6 +159,7 @@ export class CannonRigidBody implements IRigidBody {
     private _sharedBody!: CannonSharedBody;
 
     private _isEnabled = false;
+    private _gravityScale = 1;
 
     /** LIFECYCLE */
 
