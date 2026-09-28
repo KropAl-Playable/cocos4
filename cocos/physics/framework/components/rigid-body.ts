@@ -41,7 +41,7 @@ import { DEBUG } from 'internal:constants';
 import { Vec3, error, warn } from '../../../core';
 import { Component } from '../../../scene-graph';
 import { IRigidBody } from '../../spec/i-rigid-body';
-import { selector, createRigidBody } from '../physics-selector';
+import { selector, createRigidBody, getPhysicsBackendCapabilities } from '../physics-selector';
 import { ERigidBodyType } from '../physics-enum';
 import { PhysicsSystem } from '../physics-system';
 
@@ -205,6 +205,111 @@ export class RigidBody extends Component {
     }
 
     /**
+     * @en Per-body gravity multiplier. Zero disables gravity for this body.
+     * Backends without native gravity scaling fall back to the legacy on/off behavior.
+     * @zh 刚体重力倍率。0 表示禁用重力；不支持倍率的后端会退化为开关行为。
+     */
+    @visible(isDynamicBody)
+    @displayOrder(4.5)
+    @tooltip('i18n:physics3d.rigidbody.gravityScale')
+    public get gravityScale (): number {
+        return this._gravityScale;
+    }
+
+    public set gravityScale (value: number) {
+        this._gravityScale = value;
+        this._applyGravitySettings();
+    }
+
+    /**
+     * @en Whether collider geometry should determine the center of mass automatically.
+     * @zh 是否由碰撞体几何自动计算质心。
+     */
+    @visible(isDynamicBody)
+    @displayOrder(5)
+    @tooltip('i18n:physics3d.rigidbody.automaticCenterOfMass')
+    public get automaticCenterOfMass (): boolean {
+        return this._automaticCenterOfMass;
+    }
+
+    public set automaticCenterOfMass (value: boolean) {
+        this._automaticCenterOfMass = value;
+        if (this._body?.setAutomaticCenterOfMass) this._body.setAutomaticCenterOfMass(value);
+        if (!value && this._body?.setCenterOfMass) this._body.setCenterOfMass(this._centerOfMass);
+    }
+
+    /**
+     * @en Local-space center of mass used when automaticCenterOfMass is disabled.
+     * @zh 关闭自动质心后使用的本地空间质心。
+     */
+    @type(Vec3)
+    @visible(isDynamicBody)
+    @displayOrder(5.5)
+    @tooltip('i18n:physics3d.rigidbody.centerOfMass')
+    public get centerOfMass (): Vec3 {
+        return this._centerOfMass;
+    }
+
+    public set centerOfMass (value: Vec3) {
+        Vec3.copy(this._centerOfMass, value);
+        if (!this._automaticCenterOfMass && this._body?.setCenterOfMass) {
+            this._body.setCenterOfMass(this._centerOfMass);
+        }
+    }
+
+
+    @visible(isDynamicBody)
+    @displayOrder(5.8)
+    @tooltip('i18n:physics3d.rigidbody.freezePositionX')
+    public get freezePositionX (): boolean { return this._freezePositionX; }
+    public set freezePositionX (value: boolean) { this._freezePositionX = value; this._applyLinearConstraints(); }
+
+    @visible(isDynamicBody)
+    @displayOrder(5.81)
+    @tooltip('i18n:physics3d.rigidbody.freezePositionY')
+    public get freezePositionY (): boolean { return this._freezePositionY; }
+    public set freezePositionY (value: boolean) { this._freezePositionY = value; this._applyLinearConstraints(); }
+
+    @visible(isDynamicBody)
+    @displayOrder(5.82)
+    @tooltip('i18n:physics3d.rigidbody.freezePositionZ')
+    public get freezePositionZ (): boolean { return this._freezePositionZ; }
+    public set freezePositionZ (value: boolean) { this._freezePositionZ = value; this._applyLinearConstraints(); }
+
+    @visible(isDynamicBody)
+    @displayOrder(5.9)
+    @tooltip('i18n:physics3d.rigidbody.freezeRotationX')
+    public get freezeRotationX (): boolean { return this._freezeRotationX; }
+    public set freezeRotationX (value: boolean) { this._freezeRotationX = value; this._applyAngularConstraints(); }
+
+    @visible(isDynamicBody)
+    @displayOrder(5.91)
+    @tooltip('i18n:physics3d.rigidbody.freezeRotationY')
+    public get freezeRotationY (): boolean { return this._freezeRotationY; }
+    public set freezeRotationY (value: boolean) { this._freezeRotationY = value; this._applyAngularConstraints(); }
+
+    @visible(isDynamicBody)
+    @displayOrder(5.92)
+    @tooltip('i18n:physics3d.rigidbody.freezeRotationZ')
+    public get freezeRotationZ (): boolean { return this._freezeRotationZ; }
+    public set freezeRotationZ (value: boolean) { this._freezeRotationZ = value; this._applyAngularConstraints(); }
+
+    /**
+     * @en Convenience switch that freezes or unfreezes all rotational axes.
+     * @zh 冻结或解冻全部旋转轴的便捷开关。
+     */
+    public get freezeRotation (): boolean {
+        return this._freezeRotationX && this._freezeRotationY && this._freezeRotationZ;
+    }
+
+    public set freezeRotation (value: boolean) {
+        this._freezeRotationX = value;
+        this._freezeRotationY = value;
+        this._freezeRotationZ = value;
+        this._applyAngularConstraints();
+    }
+
+    /**
      * @en
      * Gets or sets the linear velocity factor that can be used to control the scaling of the velocity in each axis direction.
      * @zh
@@ -219,9 +324,7 @@ export class RigidBody extends Component {
 
     public set linearFactor (value: Vec3) {
         Vec3.copy(this._linearFactor, value);
-        if (this._body) {
-            this._body.setLinearFactor(this._linearFactor);
-        }
+        this._applyLinearConstraints();
     }
 
     /**
@@ -239,9 +342,7 @@ export class RigidBody extends Component {
 
     public set angularFactor (value: Vec3) {
         Vec3.copy(this._angularFactor, value);
-        if (this._body) {
-            this._body.setAngularFactor(this._angularFactor);
-        }
+        this._applyAngularConstraints();
     }
 
     /**
@@ -250,17 +351,16 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置进入休眠的速度临界值。
      */
+    @visible(isDynamicBody)
+    @displayOrder(8)
+    @tooltip('i18n:physics3d.rigidbody.sleepThreshold')
     public get sleepThreshold (): number {
-        if (this._isInitialized) {
-            return this._body!.getSleepThreshold();
-        }
-        return 0.1;
+        return this._sleepThreshold;
     }
 
     public set sleepThreshold (v: number) {
-        if (this._isInitialized) {
-            this._body!.setSleepThreshold(v);
-        }
+        this._sleepThreshold = Math.max(0, v);
+        if (this._body) this._body.setSleepThreshold(this._sleepThreshold);
     }
 
     /**
@@ -269,17 +369,16 @@ export class RigidBody extends Component {
      * @zh
      * 开启或关闭连续碰撞检测。
      */
+    @visible(isDynamicBody)
+    @displayOrder(9)
+    @tooltip('i18n:physics3d.rigidbody.useCCD')
     public get useCCD (): boolean {
-        if (this._isInitialized) {
-            return this._body!.isUsingCCD();
-        }
-        return false;
+        return this._useCCD;
     }
 
     public set useCCD (v: boolean) {
-        if (this._isInitialized) {
-            this._body!.useCCD(v);
-        }
+        this._useCCD = v;
+        if (this._body) this._body.useCCD(v);
     }
 
     /**
@@ -396,6 +495,38 @@ export class RigidBody extends Component {
     private _useGravity = true;
 
     @serializable
+    private _gravityScale = 1;
+
+    @serializable
+    private _automaticCenterOfMass = true;
+
+    @serializable
+    private readonly _centerOfMass = new Vec3();
+
+    @serializable
+    private _freezePositionX = false;
+    @serializable
+    private _freezePositionY = false;
+    @serializable
+    private _freezePositionZ = false;
+
+    @serializable
+    private _freezeRotationX = false;
+    @serializable
+    private _freezeRotationY = false;
+    @serializable
+    private _freezeRotationZ = false;
+
+    @serializable
+    private _sleepThreshold = 0.1;
+
+    @serializable
+    private _useCCD = false;
+
+    private readonly _effectiveLinearFactor = new Vec3(1, 1, 1);
+    private readonly _effectiveAngularFactor = new Vec3(1, 1, 1);
+
+    @serializable
     private _linearFactor: Vec3 = new Vec3(1, 1, 1);
 
     @serializable
@@ -416,7 +547,15 @@ export class RigidBody extends Component {
     }
 
     protected onEnable (): void {
-        if (this._body) this._body.onEnable!();
+        if (!this._body) return;
+        this._body.onEnable!();
+        this._applyGravitySettings();
+        this._applyLinearConstraints();
+        this._applyAngularConstraints();
+        this._body.setSleepThreshold(this._sleepThreshold);
+        this._body.useCCD(this._useCCD);
+        if (this._body.setAutomaticCenterOfMass) this._body.setAutomaticCenterOfMass(this._automaticCenterOfMass);
+        if (!this._automaticCenterOfMass && this._body.setCenterOfMass) this._body.setCenterOfMass(this._centerOfMass);
     }
 
     protected onDisable (): void {
@@ -425,6 +564,48 @@ export class RigidBody extends Component {
 
     protected onDestroy (): void {
         if (this._body) this._body.onDestroy!();
+    }
+
+    /**
+     * @en Whether the active backend has exact custom center-of-mass support.
+     * @zh 当前物理后端是否精确支持自定义质心。
+     */
+    public get supportsCenterOfMass (): boolean {
+        return getPhysicsBackendCapabilities().centerOfMass;
+    }
+
+    public get supportsGravityScale (): boolean {
+        return getPhysicsBackendCapabilities().gravityScale;
+    }
+
+    private _applyGravitySettings (): void {
+        if (!this._body) return;
+        const effectiveScale = this._useGravity ? this._gravityScale : 0;
+        if (this._body.setGravityScale) {
+            this._body.setGravityScale(effectiveScale);
+        } else {
+            this._body.useGravity(effectiveScale !== 0);
+        }
+    }
+
+    private _applyLinearConstraints (): void {
+        if (!this._body) return;
+        this._effectiveLinearFactor.set(
+            this._freezePositionX ? 0 : this._linearFactor.x,
+            this._freezePositionY ? 0 : this._linearFactor.y,
+            this._freezePositionZ ? 0 : this._linearFactor.z,
+        );
+        this._body.setLinearFactor(this._effectiveLinearFactor);
+    }
+
+    private _applyAngularConstraints (): void {
+        if (!this._body) return;
+        this._effectiveAngularFactor.set(
+            this._freezeRotationX ? 0 : this._angularFactor.x,
+            this._freezeRotationY ? 0 : this._angularFactor.y,
+            this._freezeRotationZ ? 0 : this._angularFactor.z,
+        );
+        this._body.setAngularFactor(this._effectiveAngularFactor);
     }
 
     /// PUBLIC METHOD ///
