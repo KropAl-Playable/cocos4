@@ -290,16 +290,21 @@ export class HavokRigidBody implements IRigidBody {
     private _clampVelocity (angular: boolean): void {
         const maximum = angular ? this._maxAngularVelocity : this._maxLinearVelocity;
         if (maximum <= 0 || this._rigidBody.type !== ERigidBodyType.DYNAMIC) return;
-        const getter = angular ? this._instance.HP_Body_GetAngularVelocity : this._instance.HP_Body_GetLinearVelocity;
-        const setter = angular ? this._instance.HP_Body_SetAngularVelocity : this._instance.HP_Body_SetLinearVelocity;
-        const [result, velocity] = getter.call(this._instance, this.impl);
+        const resultAndVelocity = angular
+            ? this._instance.HP_Body_GetAngularVelocity(this.impl)
+            : this._instance.HP_Body_GetLinearVelocity(this.impl);
+        const result = resultAndVelocity[0];
+        const velocity = resultAndVelocity[1];
         this._check(result, angular ? 'HP_Body_GetAngularVelocity' : 'HP_Body_GetLinearVelocity');
         const lengthSq = velocity[0] * velocity[0] + velocity[1] * velocity[1] + velocity[2] * velocity[2];
         const maxSq = maximum * maximum;
         if (lengthSq <= maxSq || lengthSq <= 0) return;
         const scale = maximum / Math.sqrt(lengthSq);
         velocity[0] *= scale; velocity[1] *= scale; velocity[2] *= scale;
-        this._check(setter.call(this._instance, this.impl, velocity), angular ? 'HP_Body_SetAngularVelocity' : 'HP_Body_SetLinearVelocity');
+        const setResult = angular
+            ? this._instance.HP_Body_SetAngularVelocity(this.impl, velocity)
+            : this._instance.HP_Body_SetLinearVelocity(this.impl, velocity);
+        this._check(setResult, angular ? 'HP_Body_SetAngularVelocity' : 'HP_Body_SetLinearVelocity');
     }
 
     private _rebuildAxisLockConstraint (): void {
