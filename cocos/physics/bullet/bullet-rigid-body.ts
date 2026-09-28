@@ -84,9 +84,8 @@ export class BulletRigidBody implements IRigidBody {
             rigidBodyFlag &= (~btRigidBodyFlags.BT_DISABLE_WORLD_GRAVITY);
         } else {
             const gravity = PhysicsSystem.instance.gravity;
-            const scaledGravity = BulletCache.instance.CCT_V3_0;
-            scaledGravity.set(gravity.x * value, gravity.y * value, gravity.z * value);
-            bt.RigidBody_setGravity(this.impl, cocos2BulletVec3(BulletCache.instance.BT_V3_0, scaledGravity));
+            v3_0.set(gravity.x * value, gravity.y * value, gravity.z * value);
+            bt.RigidBody_setGravity(this.impl, cocos2BulletVec3(BulletCache.instance.BT_V3_0, v3_0));
             rigidBodyFlag |= btRigidBodyFlags.BT_DISABLE_WORLD_GRAVITY;
         }
         bt.RigidBody_setFlags(this.impl, rigidBodyFlag);
