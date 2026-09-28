@@ -50,7 +50,7 @@ game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
     selector.register('bullet', {
         capabilities: {
             centerOfMass: false,
-            gravityScale: false,
+            gravityScale: true,
             axisLocks: true,
             ccd: true,
             restitution: true,
