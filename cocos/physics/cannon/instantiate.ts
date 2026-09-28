@@ -45,7 +45,7 @@ game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
     selector.register('cannon.js', {
         capabilities: {
             centerOfMass: false,
-            gravityScale: false,
+            gravityScale: true,
             axisLocks: true,
             ccd: true,
             restitution: true,
