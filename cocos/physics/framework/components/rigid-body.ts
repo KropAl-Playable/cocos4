@@ -201,7 +201,7 @@ export class RigidBody extends Component {
 
     public set useGravity (value) {
         this._useGravity = value;
-        if (this._body) this._body.useGravity(value);
+        this._applyGravitySettings();
     }
 
     /**
