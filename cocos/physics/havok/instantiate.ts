@@ -21,7 +21,7 @@ game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
         capabilities: {
             centerOfMass: true,
             gravityScale: true,
-            axisLocks: true,
+            axisLocks: false,
             ccd: false,
             restitution: true,
             materialCombineModes: true,
