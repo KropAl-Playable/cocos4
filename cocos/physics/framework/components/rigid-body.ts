@@ -258,45 +258,28 @@ export class RigidBody extends Component {
     }
 
 
-    @visible(isDynamicBody)
-    @displayOrder(5.8)
-    @tooltip('i18n:physics3d.rigidbody.freezePositionX')
     public get freezePositionX (): boolean { return this._freezePositionX; }
     public set freezePositionX (value: boolean) { this._freezePositionX = value; this._applyLinearConstraints(); }
 
-    @visible(isDynamicBody)
-    @displayOrder(5.81)
-    @tooltip('i18n:physics3d.rigidbody.freezePositionY')
     public get freezePositionY (): boolean { return this._freezePositionY; }
     public set freezePositionY (value: boolean) { this._freezePositionY = value; this._applyLinearConstraints(); }
 
-    @visible(isDynamicBody)
-    @displayOrder(5.82)
-    @tooltip('i18n:physics3d.rigidbody.freezePositionZ')
     public get freezePositionZ (): boolean { return this._freezePositionZ; }
     public set freezePositionZ (value: boolean) { this._freezePositionZ = value; this._applyLinearConstraints(); }
 
-    @visible(isDynamicBody)
-    @displayOrder(5.9)
-    @tooltip('i18n:physics3d.rigidbody.freezeRotationX')
     public get freezeRotationX (): boolean { return this._freezeRotationX; }
     public set freezeRotationX (value: boolean) { this._freezeRotationX = value; this._applyAngularConstraints(); }
 
-    @visible(isDynamicBody)
-    @displayOrder(5.91)
-    @tooltip('i18n:physics3d.rigidbody.freezeRotationY')
     public get freezeRotationY (): boolean { return this._freezeRotationY; }
     public set freezeRotationY (value: boolean) { this._freezeRotationY = value; this._applyAngularConstraints(); }
 
-    @visible(isDynamicBody)
-    @displayOrder(5.92)
-    @tooltip('i18n:physics3d.rigidbody.freezeRotationZ')
     public get freezeRotationZ (): boolean { return this._freezeRotationZ; }
     public set freezeRotationZ (value: boolean) { this._freezeRotationZ = value; this._applyAngularConstraints(); }
 
     /**
-     * @en Convenience switch that freezes or unfreezes all rotational axes.
-     * @zh 冻结或解冻全部旋转轴的便捷开关。
+     * @en Experimental runtime convenience switch. Hidden from the Inspector until
+     * backend solver-lock semantics are validated consistently.
+     * @zh 实验性运行时便捷开关。在各后端求解器锁定语义验证完成前不在 Inspector 中显示。
      */
     public get freezeRotation (): boolean {
         return this._freezeRotationX && this._freezeRotationY && this._freezeRotationZ;
