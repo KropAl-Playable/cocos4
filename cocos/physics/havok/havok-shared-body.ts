@@ -145,6 +145,7 @@ export class HavokSharedBody {
     }
 
     beforeStep (fixedTimeStep: number): void { this._wrappedBody?.beforeStep(fixedTimeStep); }
+    afterStep (): void { this._wrappedBody?.afterStep(); }
 
     destroy (): void {
         HavokSharedBody._map.delete(this.node.uuid);
