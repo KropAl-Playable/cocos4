@@ -97,6 +97,7 @@ export class PhysXWorld extends PhysXInstance implements IPhysicsWorld {
             this._fetchResults();
             for (let i = 0; i < this.wrappedBodies.length; i++) {
                 const body = this.wrappedBodies[i];
+                body.wrappedBody?.afterStep();
                 body.syncPhysicsToScene();
             }
         }
@@ -136,6 +137,7 @@ export class PhysXWorld extends PhysXInstance implements IPhysicsWorld {
         this._fetchResults();
         for (let i = 0; i < this.wrappedBodies.length; i++) {
             const body = this.wrappedBodies[i];
+            body.wrappedBody?.afterStep();
             body.syncPhysicsToScene();
         }
     }
