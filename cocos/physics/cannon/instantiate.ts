@@ -49,6 +49,7 @@ game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
             axisLocks: true,
             ccd: true,
             restitution: true,
+            materialCombineModes: false,
         },
         PhysicsWorld: CannonWorld,
         RigidBody: CannonRigidBody,
