@@ -258,6 +258,24 @@ Do not silently pretend every backend has identical capabilities. Prefer:
 
 This is particularly important for center-of-mass control, gravity scaling, CCD and solver locks.
 
+## Phase 4.3 — Havok shape coverage
+
+Current implementation:
+
+- ✅ CylinderCollider registered through `HavokCylinderShape`;
+- ✅ MeshCollider registered through `HavokTrimeshShape`;
+- ✅ `MeshCollider.convex=true` maps to Havok convex hull creation;
+- ✅ non-convex MeshCollider maps to Havok triangle mesh;
+- ✅ dynamic non-convex triangle mesh is rejected explicitly; dynamic mesh bodies must use `convex=true`;
+- ✅ negative world-scale triangle winding is corrected during mesh extraction;
+- ✅ degenerate triangles / degenerate convex hull inputs are filtered/rejected;
+- ⏳ Creator smoke: Cylinder;
+- ⏳ Creator smoke: static non-convex MeshCollider;
+- ⏳ Creator smoke: dynamic convex MeshCollider;
+- ⏳ decide whether Cone deserves a dedicated wrapper or a convex-hull path.
+
+No build/test success is claimed for this shape-registration pass until local validation runs.
+
 ## Phase C — feature expansion
 
 Only after Phase B is stable:
