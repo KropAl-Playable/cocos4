@@ -48,6 +48,13 @@ import { PhysicsSystem } from '../framework';
 
 game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
     selector.register('bullet', {
+        capabilities: {
+            centerOfMass: false,
+            gravityScale: false,
+            axisLocks: true,
+            ccd: true,
+            restitution: true,
+        },
         PhysicsWorld: BulletWorld,
         RigidBody: BulletRigidBody,
 
