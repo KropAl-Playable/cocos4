@@ -33,10 +33,12 @@ First COCOS 4 vertical slice is now on `feat/havok-backend`:
 - ✅ real-WASM smoke harness and body-sync benchmark ported;
 - ✅ local COCOS 4 engine build completed after fixing the native external WASM path;
 - ✅ Creator runtime log confirms `[havok]: Havok wasm lib loaded.`;
-- ⏳ local `npm run test:havok-wasm` validation;
-- ⏳ Creator/browser rigid-body scene smoke with Havok selected.
+- ✅ local `npm run test:havok-wasm` validation;
+- ✅ Feature Cropping exposes Havok;
+- ✅ Creator rigid-body scene smoke validated with Box / Sphere / Capsule;
+- ✅ contact stability reported high in local testing.
 
-No COCOS 4 build/test success is claimed until those local checks run.
+The first Havok core slice is therefore validated enough to move into framework/API work.
 
 ## Existing engine integration point
 
@@ -180,6 +182,43 @@ First supported scope:
 
 Do not start with every shape or constraint.
 
+## Phase 4.2 — Physics framework API expansion
+
+This phase deliberately improves the shared Cocos physics authoring/runtime contract for **all**
+backends instead of adding Havok-only gameplay helpers.
+
+Current implementation on `feat/havok-backend`:
+
+- ✅ backend capability metadata contract;
+- ✅ serialized `RigidBody.gravityScale`;
+- ✅ serialized `automaticCenterOfMass` + `centerOfMass`;
+- ✅ serialized freeze-position X/Y/Z controls;
+- ✅ serialized freeze-rotation X/Y/Z controls + `freezeRotation` convenience switch;
+- ✅ existing `linearFactor` / `angularFactor` remain available as lower-level controls;
+- ✅ `sleepThreshold` and `useCCD` are now serialized/Inspector-authorable;
+- ✅ Havok native gravity factor support;
+- ✅ Havok custom center-of-mass support through mass properties;
+- ✅ `PhysicsMaterial.bounciness` alias for restitution;
+- ✅ Collider-level `bounciness` and `friction` authoring shortcuts that create a local material instance when required;
+- ⏳ validate serialization + runtime changes across Havok / Bullet / Cannon / PhysX;
+- ⏳ extend exact gravity-scale support to additional backends where practical;
+- ⏳ evaluate native/exact axis locking for Havok (current generic factor path is not yet claimed as exact solver locking);
+- ⏳ add velocity limits and custom inertia in a second 4.2 pass;
+- ⏳ evaluate friction/restitution combine modes per backend.
+
+The API should exist at the framework level even when a backend cannot implement a feature exactly.
+Backend capability metadata is used to distinguish exact support from fallback behavior.
+
+### 4.2 design rule
+
+Do not silently pretend every backend has identical capabilities. Prefer:
+
+1. exact native implementation;
+2. correct lightweight emulation;
+3. explicit capability=false fallback.
+
+This is particularly important for center-of-mass control, gravity scaling, CCD and solver locks.
+
 ## Phase C — feature expansion
 
 Only after Phase B is stable:
@@ -189,9 +228,13 @@ Only after Phase B is stable:
 - triggers and collision events;
 - sweep tests;
 - point-to-point / hinge / fixed / configurable constraints;
-- ragdoll authoring helpers;
-- force-field / constant-force helpers;
-- 2-wheel / 4-wheel vehicle helpers.
+- advanced character / articulated-body helpers only after the shared framework and constraints are mature;
+- a redesigned Ragdoll v2 if a production use-case justifies it;
+- a redesigned Vehicle v2 if a production use-case justifies it.
+
+The older 3.8.8 force-field / ragdoll / vehicle extras are **reference material only** and will not
+be ported wholesale. Force fields are not planned as a standalone subsystem; radial/vortex effects
+can be lightweight query + impulse utilities if needed.
 
 ## Async initialization problem
 
