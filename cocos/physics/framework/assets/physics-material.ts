@@ -130,6 +130,18 @@ export class PhysicsMaterial extends Asset {
         }
     }
 
+    /**
+     * @en Authoring-friendly alias for restitution.
+     * @zh restitution 的易用别名。
+     */
+    get bounciness (): number {
+        return this.restitution;
+    }
+
+    set bounciness (value: number) {
+        this.restitution = value;
+    }
+
     readonly id: number;
     private static _idCounter = 0;
 
