@@ -578,6 +578,14 @@ export class RigidBody extends Component {
         return getPhysicsBackendCapabilities().gravityScale;
     }
 
+    public get supportsAxisLocks (): boolean {
+        return getPhysicsBackendCapabilities().axisLocks;
+    }
+
+    public get supportsCCD (): boolean {
+        return getPhysicsBackendCapabilities().ccd;
+    }
+
     private _applyGravitySettings (): void {
         if (!this._body) return;
         const effectiveScale = this._useGravity ? this._gravityScale : 0;
