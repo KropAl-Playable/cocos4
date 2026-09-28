@@ -56,6 +56,7 @@ export class PhysXRigidBody implements IRigidBody {
     isSleepy = false;
     private _isEnabled = false;
     private _isUsingCCD = false;
+    private _gravityScale = 1;
     private _rigidBody!: RigidBody;
     private _sharedBody!: PhysXSharedBody;
 
@@ -108,8 +109,22 @@ export class PhysXRigidBody implements IRigidBody {
     }
 
     useGravity (v: boolean): void {
+        this.setGravityScale(v ? 1 : 0);
+    }
+
+    setGravityScale (value: number): void {
+        this._gravityScale = value;
         if (this.isStatic) return;
-        this.impl.setActorFlag(PX.ActorFlag.eDISABLE_GRAVITY, !v);
+        this.impl.setActorFlag(PX.ActorFlag.eDISABLE_GRAVITY, value !== 1);
+        if (value !== 0) this.wakeUp();
+    }
+
+    beforeStep (): void {
+        if (!this.isInScene || this.isStaticOrKinematic || this._gravityScale === 0 || this._gravityScale === 1) return;
+        const gravity = PhysicsSystem.instance.gravity;
+        const scaledMass = this._rigidBody.mass * this._gravityScale;
+        v3_0.set(gravity.x * scaledMass, gravity.y * scaledMass, gravity.z * scaledMass);
+        applyForce(true, this.impl, v3_0, Vec3.ZERO);
     }
 
     useCCD (v: boolean): void {
