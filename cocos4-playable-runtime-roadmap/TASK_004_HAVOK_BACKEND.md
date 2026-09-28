@@ -206,7 +206,12 @@ Current implementation on `feat/havok-backend`:
 - ⏳ extend exact gravity-scale support to additional backends where practical;
 - ⏳ evaluate native/exact axis locking for Havok (current generic factor path is not yet claimed as exact solver locking);
 - ⏳ add velocity limits and custom inertia in a second 4.2 pass;
-- ⏳ evaluate friction/restitution combine modes per backend.
+- ✅ added shared `EPhysicsMaterialCombine` with Geometric Mean / Minimum / Maximum / Average / Multiply;
+- ✅ PhysicsMaterial now serializes independent `frictionCombine` and `restitutionCombine`;
+- ✅ defaults: friction = Geometric Mean, restitution = Average;
+- ✅ Havok maps all five combine modes natively;
+- ✅ backend capability metadata exposes `materialCombineModes`; Cannon/Bullet/PhysX are currently marked unsupported for exact per-material combine selection;
+- ⏳ validate combine-mode serialization and Havok runtime behavior in Creator.
 
 The API should exist at the framework level even when a backend cannot implement a feature exactly.
 Backend capability metadata is used to distinguish exact support from fallback behavior.
