@@ -199,7 +199,9 @@ Current implementation on `feat/havok-backend`:
 - ✅ Havok native gravity factor support;
 - ✅ Havok custom center-of-mass support through mass properties;
 - ✅ `PhysicsMaterial.bounciness` alias for restitution;
-- ✅ Collider-level `bounciness` and `friction` authoring shortcuts that create a local material instance when required;
+- ✅ Collider-level `bounciness` and `friction` runtime shortcuts that create a local material instance when required;
+- ✅ PhysicsMaterial kept authoritative in the Inspector (duplicate Collider friction/bounciness fields removed from editor authoring);
+- ✅ Havok restitution combine default changed from geometric mean to arithmetic mean so a bouncy body does not lose all restitution against a zero-restitution floor;
 - ⏳ validate serialization + runtime changes across Havok / Bullet / Cannon / PhysX;
 - ⏳ extend exact gravity-scale support to additional backends where practical;
 - ⏳ evaluate native/exact axis locking for Havok (current generic factor path is not yet claimed as exact solver locking);
