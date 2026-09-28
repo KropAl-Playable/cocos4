@@ -965,6 +965,10 @@ module.exports = link(mixin({
             label: "Bullet Based Physics System",
             description: "Physics system that based on Bullet.",
         },
+        physics_havok: {
+            label: "Havok Based Physics System",
+            description: "Web physics system based on the standalone Havok WASM runtime.",
+        },
         physics_physx: {
             label: "PhysX Based Physics System",
             description: "Physics system that based on PhysX.",
@@ -1156,6 +1160,12 @@ module.exports = link(mixin({
                 loadManual: {
                     label: 'Load Manually',
                     description: `Whether to load PhysX Wasm/AsmJS moudle manually by 'loadWasmModulePhysX' API ?`,
+                },
+            },
+            havok: {
+                loadManual: {
+                    label: 'Load Manually',
+                    description: `Whether to load the Havok WASM module manually by 'loadWasmModuleHavok' API ?`,
                 },
             },
         },
