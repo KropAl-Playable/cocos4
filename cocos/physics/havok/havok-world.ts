@@ -43,6 +43,7 @@ export interface IHavokBodySync {
     syncPhysicsToScene (bodyBuffer?: number): boolean | void;
     refreshTransformOffset? (): void;
     beforeStep? (fixedTimeStep: number): void;
+    afterStep? (): void;
 }
 
 export interface HavokPerformanceStats {
@@ -217,6 +218,7 @@ export class HavokWorld implements IPhysicsWorld {
         const stepStart = this._profilingEnabled ? nowMilliseconds() : 0;
         assertHavokResult(this._instance, this._instance.HP_World_Step(world, fixedTimeStep), 'HP_World_Step');
         if (this._profilingEnabled) this._performanceStats.stepMilliseconds = nowMilliseconds() - stepStart;
+        for (let i = 0; i < this._bodies.length; i++) this._bodies[i].afterStep?.();
         this._refreshBodyBuffer();
         const syncStart = this._profilingEnabled ? nowMilliseconds() : 0;
         let synchronized = 0;
