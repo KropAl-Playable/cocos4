@@ -21,10 +21,12 @@ game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
         capabilities: {
             centerOfMass: true,
             gravityScale: true,
-            axisLocks: false,
+            axisLocks: true,
             ccd: false,
             restitution: true,
             materialCombineModes: true,
+            customInertia: true,
+            velocityLimits: true,
         },
         PhysicsWorld: HavokWorld,
         RigidBody: HavokRigidBody,
