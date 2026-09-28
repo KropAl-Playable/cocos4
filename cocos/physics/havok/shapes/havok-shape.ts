@@ -14,6 +14,7 @@ import {
     EAxisDirection,
     ERigidBodyType,
     MeshCollider,
+    EPhysicsMaterialCombine,
     PhysicsMaterial,
     PhysicsSystem,
     RigidBody,
@@ -30,6 +31,22 @@ const IDENTITY_ROTATION: [number, number, number, number] = [0, 0, 0, 1];
 const HULL_POSITION_CACHE = new WeakMap<Mesh, number[]>();
 
 function positive (value: number): number { return Math.max(MIN_SIZE, Math.abs(value)); }
+
+function toHavokMaterialCombine (instance: HavokModule, value: EPhysicsMaterialCombine): number {
+    switch (value) {
+    case EPhysicsMaterialCombine.MINIMUM:
+        return instance.MaterialCombine.MINIMUM;
+    case EPhysicsMaterialCombine.MAXIMUM:
+        return instance.MaterialCombine.MAXIMUM;
+    case EPhysicsMaterialCombine.AVERAGE:
+        return instance.MaterialCombine.ARITHMETIC_MEAN;
+    case EPhysicsMaterialCombine.MULTIPLY:
+        return instance.MaterialCombine.MULTIPLY;
+    case EPhysicsMaterialCombine.GEOMETRIC_MEAN:
+    default:
+        return instance.MaterialCombine.GEOMETRIC_MEAN;
+    }
+}
 
 export abstract class HavokShape implements IBaseShape {
     get impl (): HavokShapeId | null { return this._impl; }
@@ -88,12 +105,8 @@ export abstract class HavokShape implements IBaseShape {
     setMaterial (value: PhysicsMaterial | null): void {
         if (!this._impl) return;
         const material = value || PhysicsSystem.instance.defaultMaterial;
-        const frictionCombine = this._instance.MaterialCombine.GEOMETRIC_MEAN;
-        // GEOMETRIC_MEAN is a poor default for restitution: a common static floor
-        // has restitution=0, which collapses any dynamic body's bounce to zero.
-        // ARITHMETIC_MEAN matches the expected "bouncy object on ordinary floor"
-        // authoring behavior until explicit per-material combine modes are exposed.
-        const restitutionCombine = this._instance.MaterialCombine.ARITHMETIC_MEAN;
+        const frictionCombine = toHavokMaterialCombine(this._instance, material.frictionCombine);
+        const restitutionCombine = toHavokMaterialCombine(this._instance, material.restitutionCombine);
         assertHavokResult(this._instance, this._instance.HP_Shape_SetMaterial(this._impl, [
             material.friction,
             material.friction,
