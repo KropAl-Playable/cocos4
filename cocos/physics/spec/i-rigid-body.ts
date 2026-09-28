@@ -54,6 +54,11 @@ export interface IRigidBody extends ILifecycle, IGroupMask {
     setCenterOfMass?: (v: IVec3Like) => void;
     setAutomaticCenterOfMass?: (v: boolean) => void;
     setGravityScale?: (v: number) => void;
+    setAutomaticInertiaTensor?: (v: boolean) => void;
+    setInertiaTensor?: (v: IVec3Like) => void;
+    setInertiaTensorRotation?: (x: number, y: number, z: number, w: number) => void;
+    setMaxLinearVelocity?: (v: number) => void;
+    setMaxAngularVelocity?: (v: number) => void;
 
     wakeUp (): void;
     sleep (): void;
