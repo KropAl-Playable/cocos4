@@ -7,6 +7,12 @@ import { BUILD, LOAD_HAVOK_MANUALLY } from 'internal:constants';
 import { Game, game } from '../../game';
 import { PhysicsSystem } from '../framework/physics-system';
 import { selector } from '../framework/physics-selector';
+import {
+    HavokConfigurableConstraint,
+    HavokFixedConstraint,
+    HavokHingeConstraint,
+    HavokPointToPointConstraint,
+} from './constraints/havok-constraint';
 import { HavokWorld } from './havok-world';
 import { HavokRigidBody } from './havok-rigid-body';
 import {
@@ -37,6 +43,10 @@ game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
         CapsuleShape: HavokCapsuleShape,
         CylinderShape: HavokCylinderShape,
         TrimeshShape: HavokTrimeshShape,
+        PointToPointConstraint: HavokPointToPointConstraint,
+        HingeConstraint: HavokHingeConstraint,
+        FixedConstraint: HavokFixedConstraint,
+        ConfigurableConstraint: HavokConfigurableConstraint,
     });
 });
 
