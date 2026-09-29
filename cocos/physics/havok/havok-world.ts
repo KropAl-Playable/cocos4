@@ -275,11 +275,23 @@ export class HavokWorld implements IPhysicsWorld {
     raycastClosest (worldRay: geometry.Ray, options: IRaycastOptions, out: PhysicsRayResult): boolean {
         this._writeRay(worldRay, options.maxDistance);
         this._prepareRayCastInput(options.group, options.mask, options.queryTrigger, this._ignoredBody);
-        assertHavokResult(this._instance, this._instance.HP_World_CastRayWithCollector(this._getWorld(), this.queryCollector, this._rayCastInput), 'HP_World_CastRayWithCollector');
-        if (this._getQueryHitCount() === 0) return false;
-        const [result, hit] = this._instance.HP_QueryCollector_GetCastRayResult(this.queryCollector, 0);
-        assertHavokResult(this._instance, result, 'HP_QueryCollector_GetCastRayResult');
-        return this._assignQueryHit(hit[1], hit[0], options.maxDistance, out);
+        assertHavokResult(
+            this._instance,
+            this._instance.HP_World_CastRayWithCollector(this._getWorld(), this.queryCollector, this._rayCastInput),
+            'HP_World_CastRayWithCollector',
+        );
+        const count = this._getQueryHitCount();
+        let bestContact: HavokContactPoint | null = null;
+        let bestFraction = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < count; i++) {
+            const [result, hit] = this._instance.HP_QueryCollector_GetCastRayResult(this.queryCollector, i);
+            assertHavokResult(this._instance, result, 'HP_QueryCollector_GetCastRayResult');
+            if (hit[0] < bestFraction && this._shapeFromContact(hit[1])) {
+                bestFraction = hit[0];
+                bestContact = hit[1];
+            }
+        }
+        return bestContact !== null && this._assignQueryHit(bestContact, bestFraction, options.maxDistance, out);
     }
 
     raycastClosestIgnoringBody (
@@ -569,13 +581,27 @@ export class HavokWorld implements IPhysicsWorld {
             assertHavokResult(this._instance, this._instance.HP_World_ShapeCastWithCollector(this._getWorld(), this.queryCollector, this._shapeCastInput), 'HP_World_ShapeCastWithCollector');
             const count = this._getQueryHitCount();
             if (count === 0) return false;
-            const limit = closest ? 1 : count; let added = 0;
-            for (let i = 0; i < limit; i++) {
+            if (closest) {
+                let bestContact: HavokContactPoint | null = null;
+                let bestFraction = Number.POSITIVE_INFINITY;
+                for (let i = 0; i < count; i++) {
+                    const [result, hit] = this._instance.HP_QueryCollector_GetShapeCastResult(this.queryCollector, i);
+                    assertHavokResult(this._instance, result, 'HP_QueryCollector_GetShapeCastResult');
+                    if (hit[0] < bestFraction && this._shapeFromContact(hit[2])) {
+                        bestFraction = hit[0];
+                        bestContact = hit[2];
+                    }
+                }
+                return bestContact !== null && this._assignQueryHit(bestContact, bestFraction, options.maxDistance, out!);
+            }
+
+            let added = 0;
+            for (let i = 0; i < count; i++) {
                 const [result, hit] = this._instance.HP_QueryCollector_GetShapeCastResult(this.queryCollector, i);
                 assertHavokResult(this._instance, result, 'HP_QueryCollector_GetShapeCastResult');
-                const target = closest ? out! : pool!.add();
+                const target = pool!.add();
                 if (this._assignQueryHit(hit[2], hit[0], options.maxDistance, target)) {
-                    if (!closest) results!.push(target);
+                    results!.push(target);
                     added++;
                 }
             }
