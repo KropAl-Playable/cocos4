@@ -468,8 +468,16 @@ export class HavokWorld implements IPhysicsWorld {
         this._bodyBufferDirty = false;
     }
 
-    registerShape (shape: HavokShape): void { if (shape.impl) this.shapeRegistry.register(shape, shape.impl, shape); }
-    unregisterShape (shape: HavokShape): void { this.shapeRegistry.unregisterOwner(shape); }
+    registerShape (shape: HavokShape): void {
+        if (shape.impl) this.shapeRegistry.register(shape, shape.impl, shape);
+    }
+
+    unregisterShape (shape: HavokShape): void {
+        this.shapeRegistry.unregisterOwner(shape);
+        this._activeTriggers.forEach((pair, key): void => {
+            if (pair[0] === shape || pair[1] === shape) this._activeTriggers.delete(key);
+        });
+    }
 
     queryShapeProximity (
         shape: HavokShapeId,
