@@ -269,12 +269,67 @@ Current implementation:
 - ✅ dynamic non-convex triangle mesh is rejected explicitly; dynamic mesh bodies must use `convex=true`;
 - ✅ negative world-scale triangle winding is corrected during mesh extraction;
 - ✅ degenerate triangles / degenerate convex hull inputs are filtered/rejected;
-- ⏳ Creator smoke: Cylinder;
-- ⏳ Creator smoke: static non-convex MeshCollider;
-- ⏳ Creator smoke: dynamic convex MeshCollider;
+- ✅ Creator smoke: Cylinder validated with high-quality contacts;
+- ✅ Creator smoke: convex MeshCollider validated with high-quality contacts;
+- ⚠️ non-convex MeshCollider produced no useful collisions in Creator smoke; treat triangle-mesh support as backlog/non-production for now;
+- ✅ production guidance for v0.1: use `MeshCollider.convex=true`;
 - ⏳ decide whether Cone deserves a dedicated wrapper or a convex-hull path.
 
 No build/test success is claimed for this shape-registration pass until local validation runs.
+
+## Phase 4.4 — Queries and events
+
+The initial 3.8.8 port already brought most of the Havok query/event plumbing into `HavokWorld`.
+This phase audits and hardens that path against the Cocos framework contract instead of rewriting it.
+
+Current implementation:
+
+- ✅ `PhysicsSystem.raycast` -> Havok world collector;
+- ✅ `PhysicsSystem.raycastClosest`;
+- ✅ raycast group/mask filtering;
+- ✅ `queryTrigger` propagation;
+- ✅ closest-ray selection no longer assumes collector ordering; all hits are scanned for the minimum fraction;
+- ✅ `sweepBox` / `sweepBoxClosest`;
+- ✅ `sweepSphere` / `sweepSphereClosest`;
+- ✅ `sweepCapsule` / `sweepCapsuleClosest`;
+- ✅ closest sweep selection no longer assumes collector ordering;
+- ✅ temporary query shapes are released in `finally`;
+- ✅ collision Enter / Stay / Exit bridge exists;
+- ✅ trigger Enter / Stay / Exit bridge exists;
+- ✅ collision contacts expose world/local points and normals through `HavokContact`;
+- ✅ stale trigger-pair cache is purged when a shape is removed;
+- ✅ current v0.1 body event mask requests all Havok collision/trigger event classes; listener-specific mask optimization is deferred;
+- ⏳ Creator smoke: raycast all + closest;
+- ⏳ Creator smoke: Box/Sphere/Capsule sweeps + closest;
+- ⏳ Creator smoke: collision Enter/Stay/Exit;
+- ⏳ Creator smoke: trigger Enter/Stay/Exit;
+- ⏳ Creator smoke: group/mask + queryTrigger filtering.
+
+### 4.4 validation scene
+
+Recommended scene:
+
+~~~text
+Ray origin -> Box -> Sphere -> Trigger Capsule
+
+Verify:
+  raycast() returns all expected colliders
+  raycastClosest() returns Box
+  queryTrigger=false excludes Trigger Capsule
+  masks exclude selected groups
+
+Sweep:
+  Box/Sphere/Capsule sweep toward two separated colliders
+  Closest result must always be the nearer collider
+
+Events:
+  dynamic Sphere falls onto static Box
+  log Collision Enter / Stay / Exit
+  second object passes through trigger volume
+  log Trigger Enter / Stay / Exit
+~~~
+
+No Creator validation or automated-test success is claimed for 4.4 yet.
 
 ## Phase C — feature expansion
 
