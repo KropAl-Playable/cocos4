@@ -139,6 +139,35 @@ export class Collider extends Eventify(Component) {
     }
 
     /**
+     * @en Runtime convenience alias for this collider's restitution. PhysicsMaterial
+     * remains the authoritative Inspector value; writing this alias creates a local
+     * material instance so shared assets are not mutated.
+     * @zh 碰撞体 restitution 的运行时便捷别名。Inspector 以 PhysicsMaterial 为准；
+     * 写入该别名时会创建本地材质实例，避免修改共享资源。
+     */
+    public get bounciness (): number {
+        return this._material?.restitution ?? 0;
+    }
+
+    public set bounciness (value: number) {
+        const material = this._ensureLocalMaterial();
+        material.restitution = Math.max(0, Math.min(1, value));
+    }
+
+    /**
+     * @en Runtime convenience alias for this collider's friction.
+     * @zh 碰撞体摩擦系数的运行时便捷别名；Inspector 以 PhysicsMaterial 为准。
+     */
+    public get friction (): number {
+        return this._material?.friction ?? 0.6;
+    }
+
+    public set friction (value: number) {
+        const material = this._ensureLocalMaterial();
+        material.friction = Math.max(0, value);
+    }
+
+    /**
      * @en
      * Gets or sets the collider is trigger, this will be always trigger if using builtin.
      * @zh
@@ -447,6 +476,15 @@ export class Collider extends Eventify(Component) {
             this._shape.onDestroy!();
         }
         if (this._boundingSphere) this._boundingSphere.destroy();
+    }
+
+    private _ensureLocalMaterial (): PhysicsMaterial {
+        let material = this.material;
+        if (!material) {
+            material = new PhysicsMaterial();
+            this.material = material;
+        }
+        return material;
     }
 
     private _updateMaterial (): void {

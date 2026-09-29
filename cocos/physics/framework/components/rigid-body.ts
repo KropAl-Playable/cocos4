@@ -38,10 +38,10 @@ import {
     serializable,
 } from 'cc.decorator';
 import { DEBUG } from 'internal:constants';
-import { Vec3, error, warn } from '../../../core';
+import { Quat, Vec3, error, warn } from '../../../core';
 import { Component } from '../../../scene-graph';
 import { IRigidBody } from '../../spec/i-rigid-body';
-import { selector, createRigidBody } from '../physics-selector';
+import { selector, createRigidBody, getPhysicsBackendCapabilities } from '../physics-selector';
 import { ERigidBodyType } from '../physics-enum';
 import { PhysicsSystem } from '../physics-system';
 
@@ -201,7 +201,145 @@ export class RigidBody extends Component {
 
     public set useGravity (value) {
         this._useGravity = value;
-        if (this._body) this._body.useGravity(value);
+        this._applyGravitySettings();
+    }
+
+    /**
+     * @en Per-body gravity multiplier. Zero disables gravity for this body.
+     * Backends without native gravity scaling fall back to the legacy on/off behavior.
+     * @zh 刚体重力倍率。0 表示禁用重力；不支持倍率的后端会退化为开关行为。
+     */
+    @visible(isDynamicBody)
+    @displayOrder(4.5)
+    @tooltip('i18n:physics3d.rigidbody.gravityScale')
+    public get gravityScale (): number {
+        return this._gravityScale;
+    }
+
+    public set gravityScale (value: number) {
+        this._gravityScale = value;
+        this._applyGravitySettings();
+    }
+
+    /**
+     * @en Whether collider geometry should determine the center of mass automatically.
+     * @zh 是否由碰撞体几何自动计算质心。
+     */
+    @visible(isDynamicBody)
+    @displayOrder(5)
+    @tooltip('i18n:physics3d.rigidbody.automaticCenterOfMass')
+    public get automaticCenterOfMass (): boolean {
+        return this._automaticCenterOfMass;
+    }
+
+    public set automaticCenterOfMass (value: boolean) {
+        this._automaticCenterOfMass = value;
+        if (this._body?.setAutomaticCenterOfMass) this._body.setAutomaticCenterOfMass(value);
+        if (!value && this._body?.setCenterOfMass) this._body.setCenterOfMass(this._centerOfMass);
+    }
+
+    /**
+     * @en Local-space center of mass used when automaticCenterOfMass is disabled.
+     * @zh 关闭自动质心后使用的本地空间质心。
+     */
+    @type(Vec3)
+    @visible(isDynamicBody)
+    @displayOrder(5.5)
+    @tooltip('i18n:physics3d.rigidbody.centerOfMass')
+    public get centerOfMass (): Vec3 {
+        return this._centerOfMass;
+    }
+
+    public set centerOfMass (value: Vec3) {
+        Vec3.copy(this._centerOfMass, value);
+        if (!this._automaticCenterOfMass && this._body?.setCenterOfMass) {
+            this._body.setCenterOfMass(this._centerOfMass);
+        }
+    }
+
+
+    public get freezePositionX (): boolean { return this._freezePositionX; }
+    public set freezePositionX (value: boolean) { this._freezePositionX = value; this._applyLinearConstraints(); }
+
+    public get freezePositionY (): boolean { return this._freezePositionY; }
+    public set freezePositionY (value: boolean) { this._freezePositionY = value; this._applyLinearConstraints(); }
+
+    public get freezePositionZ (): boolean { return this._freezePositionZ; }
+    public set freezePositionZ (value: boolean) { this._freezePositionZ = value; this._applyLinearConstraints(); }
+
+    public get freezeRotationX (): boolean { return this._freezeRotationX; }
+    public set freezeRotationX (value: boolean) { this._freezeRotationX = value; this._applyAngularConstraints(); }
+
+    public get freezeRotationY (): boolean { return this._freezeRotationY; }
+    public set freezeRotationY (value: boolean) { this._freezeRotationY = value; this._applyAngularConstraints(); }
+
+    public get freezeRotationZ (): boolean { return this._freezeRotationZ; }
+    public set freezeRotationZ (value: boolean) { this._freezeRotationZ = value; this._applyAngularConstraints(); }
+
+    /**
+     * @en Experimental runtime convenience switch. Hidden from the Inspector until
+     * backend solver-lock semantics are validated consistently.
+     * @zh 实验性运行时便捷开关。在各后端求解器锁定语义验证完成前不在 Inspector 中显示。
+     */
+    public get freezeRotation (): boolean {
+        return this._freezeRotationX && this._freezeRotationY && this._freezeRotationZ;
+    }
+
+    public set freezeRotation (value: boolean) {
+        this._freezeRotationX = value;
+        this._freezeRotationY = value;
+        this._freezeRotationZ = value;
+        this._applyAngularConstraints();
+    }
+
+    /**
+     * @en Whether attached collider geometry should determine inertia automatically.
+     * @zh 是否根据附加碰撞体几何自动计算惯性张量。
+     */
+    @visible(isDynamicBody)
+    @displayOrder(5.6)
+    @tooltip('i18n:physics3d.rigidbody.automaticInertiaTensor')
+    public get automaticInertiaTensor (): boolean {
+        return this._automaticInertiaTensor;
+    }
+
+    public set automaticInertiaTensor (value: boolean) {
+        this._automaticInertiaTensor = value;
+        this._applyInertiaSettings();
+    }
+
+    /**
+     * @en Principal inertia tensor used when automaticInertiaTensor is disabled.
+     * @zh 关闭自动惯性张量后使用的主惯性张量。
+     */
+    @type(Vec3)
+    @visible(isDynamicBody)
+    @displayOrder(5.61)
+    @tooltip('i18n:physics3d.rigidbody.inertiaTensor')
+    public get inertiaTensor (): Vec3 {
+        return this._inertiaTensor;
+    }
+
+    public set inertiaTensor (value: Vec3) {
+        Vec3.copy(this._inertiaTensor, value);
+        this._applyInertiaSettings();
+    }
+
+    /**
+     * @en Rotation of the principal inertia tensor.
+     * @zh 主惯性张量方向。
+     */
+    @type(Quat)
+    @visible(isDynamicBody)
+    @displayOrder(5.62)
+    @tooltip('i18n:physics3d.rigidbody.inertiaTensorRotation')
+    public get inertiaTensorRotation (): Quat {
+        return this._inertiaTensorRotation;
+    }
+
+    public set inertiaTensorRotation (value: Quat) {
+        Quat.copy(this._inertiaTensorRotation, value);
+        this._applyInertiaSettings();
     }
 
     /**
@@ -219,9 +357,7 @@ export class RigidBody extends Component {
 
     public set linearFactor (value: Vec3) {
         Vec3.copy(this._linearFactor, value);
-        if (this._body) {
-            this._body.setLinearFactor(this._linearFactor);
-        }
+        this._applyLinearConstraints();
     }
 
     /**
@@ -239,9 +375,39 @@ export class RigidBody extends Component {
 
     public set angularFactor (value: Vec3) {
         Vec3.copy(this._angularFactor, value);
-        if (this._body) {
-            this._body.setAngularFactor(this._angularFactor);
-        }
+        this._applyAngularConstraints();
+    }
+
+    /**
+     * @en Maximum linear speed. Zero means unlimited.
+     * @zh 最大线速度。0 表示不限制。
+     */
+    @visible(isDynamicBody)
+    @displayOrder(7.2)
+    @tooltip('i18n:physics3d.rigidbody.maxLinearVelocity')
+    public get maxLinearVelocity (): number {
+        return this._maxLinearVelocity;
+    }
+
+    public set maxLinearVelocity (value: number) {
+        this._maxLinearVelocity = Math.max(0, value);
+        this._body?.setMaxLinearVelocity?.(this._maxLinearVelocity);
+    }
+
+    /**
+     * @en Maximum angular speed in radians per second. Zero means unlimited.
+     * @zh 最大角速度（弧度/秒）。0 表示不限制。
+     */
+    @visible(isDynamicBody)
+    @displayOrder(7.3)
+    @tooltip('i18n:physics3d.rigidbody.maxAngularVelocity')
+    public get maxAngularVelocity (): number {
+        return this._maxAngularVelocity;
+    }
+
+    public set maxAngularVelocity (value: number) {
+        this._maxAngularVelocity = Math.max(0, value);
+        this._body?.setMaxAngularVelocity?.(this._maxAngularVelocity);
     }
 
     /**
@@ -250,17 +416,16 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置进入休眠的速度临界值。
      */
+    @visible(isDynamicBody)
+    @displayOrder(8)
+    @tooltip('i18n:physics3d.rigidbody.sleepThreshold')
     public get sleepThreshold (): number {
-        if (this._isInitialized) {
-            return this._body!.getSleepThreshold();
-        }
-        return 0.1;
+        return this._sleepThreshold;
     }
 
     public set sleepThreshold (v: number) {
-        if (this._isInitialized) {
-            this._body!.setSleepThreshold(v);
-        }
+        this._sleepThreshold = Math.max(0, v);
+        if (this._body) this._body.setSleepThreshold(this._sleepThreshold);
     }
 
     /**
@@ -269,17 +434,16 @@ export class RigidBody extends Component {
      * @zh
      * 开启或关闭连续碰撞检测。
      */
+    @visible(isDynamicBody)
+    @displayOrder(9)
+    @tooltip('i18n:physics3d.rigidbody.useCCD')
     public get useCCD (): boolean {
-        if (this._isInitialized) {
-            return this._body!.isUsingCCD();
-        }
-        return false;
+        return this._useCCD;
     }
 
     public set useCCD (v: boolean) {
-        if (this._isInitialized) {
-            this._body!.useCCD(v);
-        }
+        this._useCCD = v;
+        if (this._body) this._body.useCCD(v);
     }
 
     /**
@@ -396,6 +560,53 @@ export class RigidBody extends Component {
     private _useGravity = true;
 
     @serializable
+    private _gravityScale = 1;
+
+    @serializable
+    private _automaticCenterOfMass = true;
+
+    @serializable
+    private readonly _centerOfMass = new Vec3();
+
+    @serializable
+    private _automaticInertiaTensor = true;
+
+    @serializable
+    private readonly _inertiaTensor = new Vec3(1, 1, 1);
+
+    @serializable
+    private readonly _inertiaTensorRotation = new Quat();
+
+    @serializable
+    private _maxLinearVelocity = 0;
+
+    @serializable
+    private _maxAngularVelocity = 0;
+
+    @serializable
+    private _freezePositionX = false;
+    @serializable
+    private _freezePositionY = false;
+    @serializable
+    private _freezePositionZ = false;
+
+    @serializable
+    private _freezeRotationX = false;
+    @serializable
+    private _freezeRotationY = false;
+    @serializable
+    private _freezeRotationZ = false;
+
+    @serializable
+    private _sleepThreshold = 0.1;
+
+    @serializable
+    private _useCCD = false;
+
+    private readonly _effectiveLinearFactor = new Vec3(1, 1, 1);
+    private readonly _effectiveAngularFactor = new Vec3(1, 1, 1);
+
+    @serializable
     private _linearFactor: Vec3 = new Vec3(1, 1, 1);
 
     @serializable
@@ -416,7 +627,18 @@ export class RigidBody extends Component {
     }
 
     protected onEnable (): void {
-        if (this._body) this._body.onEnable!();
+        if (!this._body) return;
+        this._body.onEnable!();
+        this._applyGravitySettings();
+        this._applyLinearConstraints();
+        this._applyAngularConstraints();
+        this._body.setSleepThreshold(this._sleepThreshold);
+        this._body.useCCD(this._useCCD);
+        if (this._body.setAutomaticCenterOfMass) this._body.setAutomaticCenterOfMass(this._automaticCenterOfMass);
+        if (!this._automaticCenterOfMass && this._body.setCenterOfMass) this._body.setCenterOfMass(this._centerOfMass);
+        this._applyInertiaSettings();
+        this._body.setMaxLinearVelocity?.(this._maxLinearVelocity);
+        this._body.setMaxAngularVelocity?.(this._maxAngularVelocity);
     }
 
     protected onDisable (): void {
@@ -425,6 +647,78 @@ export class RigidBody extends Component {
 
     protected onDestroy (): void {
         if (this._body) this._body.onDestroy!();
+    }
+
+    /**
+     * @en Whether the active backend has exact custom center-of-mass support.
+     * @zh 当前物理后端是否精确支持自定义质心。
+     */
+    public get supportsCenterOfMass (): boolean {
+        return getPhysicsBackendCapabilities().centerOfMass;
+    }
+
+    public get supportsGravityScale (): boolean {
+        return getPhysicsBackendCapabilities().gravityScale;
+    }
+
+    public get supportsAxisLocks (): boolean {
+        return getPhysicsBackendCapabilities().axisLocks;
+    }
+
+    public get supportsCCD (): boolean {
+        return getPhysicsBackendCapabilities().ccd;
+    }
+
+    public get supportsCustomInertia (): boolean {
+        return getPhysicsBackendCapabilities().customInertia;
+    }
+
+    public get supportsVelocityLimits (): boolean {
+        return getPhysicsBackendCapabilities().velocityLimits;
+    }
+
+    private _applyGravitySettings (): void {
+        if (!this._body) return;
+        const effectiveScale = this._useGravity ? this._gravityScale : 0;
+        if (this._body.setGravityScale) {
+            this._body.setGravityScale(effectiveScale);
+        } else {
+            this._body.useGravity(effectiveScale !== 0);
+        }
+    }
+
+    private _applyInertiaSettings (): void {
+        if (!this._body) return;
+        this._body.setAutomaticInertiaTensor?.(this._automaticInertiaTensor);
+        if (!this._automaticInertiaTensor) {
+            this._body.setInertiaTensor?.(this._inertiaTensor);
+            this._body.setInertiaTensorRotation?.(
+                this._inertiaTensorRotation.x,
+                this._inertiaTensorRotation.y,
+                this._inertiaTensorRotation.z,
+                this._inertiaTensorRotation.w,
+            );
+        }
+    }
+
+    private _applyLinearConstraints (): void {
+        if (!this._body) return;
+        this._effectiveLinearFactor.set(
+            this._freezePositionX ? 0 : this._linearFactor.x,
+            this._freezePositionY ? 0 : this._linearFactor.y,
+            this._freezePositionZ ? 0 : this._linearFactor.z,
+        );
+        this._body.setLinearFactor(this._effectiveLinearFactor);
+    }
+
+    private _applyAngularConstraints (): void {
+        if (!this._body) return;
+        this._effectiveAngularFactor.set(
+            this._freezeRotationX ? 0 : this._angularFactor.x,
+            this._freezeRotationY ? 0 : this._angularFactor.y,
+            this._freezeRotationZ ? 0 : this._angularFactor.z,
+        );
+        this._body.setAngularFactor(this._effectiveAngularFactor);
     }
 
     /// PUBLIC METHOD ///

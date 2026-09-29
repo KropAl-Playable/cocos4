@@ -74,15 +74,21 @@ export class BulletRigidBody implements IRigidBody {
     }
 
     useGravity (value: boolean): void {
+        this.setGravityScale(value ? 1 : 0);
+    }
+
+    setGravityScale (value: number): void {
         if (!this._rigidBody.isDynamic) return;
-        let m_rigidBodyFlag = bt.RigidBody_getFlags(this.impl);
-        if (value) {
-            m_rigidBodyFlag &= (~btRigidBodyFlags.BT_DISABLE_WORLD_GRAVITY);
+        let rigidBodyFlag = bt.RigidBody_getFlags(this.impl);
+        if (value === 1) {
+            rigidBodyFlag &= (~btRigidBodyFlags.BT_DISABLE_WORLD_GRAVITY);
         } else {
-            bt.RigidBody_setGravity(this.impl, cocos2BulletVec3(BulletCache.instance.BT_V3_0, Vec3.ZERO));
-            m_rigidBodyFlag |= btRigidBodyFlags.BT_DISABLE_WORLD_GRAVITY;
+            const gravity = PhysicsSystem.instance.gravity;
+            v3_0.set(gravity.x * value, gravity.y * value, gravity.z * value);
+            bt.RigidBody_setGravity(this.impl, cocos2BulletVec3(BulletCache.instance.BT_V3_0, v3_0));
+            rigidBodyFlag |= btRigidBodyFlags.BT_DISABLE_WORLD_GRAVITY;
         }
-        bt.RigidBody_setFlags(this.impl, m_rigidBodyFlag);
+        bt.RigidBody_setFlags(this.impl, rigidBodyFlag);
         this._wakeUpIfSleep();
         this._sharedBody.dirty |= EBtSharedBodyDirty.BODY_RE_ADD;
     }
@@ -107,6 +113,20 @@ export class BulletRigidBody implements IRigidBody {
         this._wakeUpIfSleep();
     }
 
+    setMaxLinearVelocity (value: number): void { this._maxLinearVelocity = Math.max(0, value); }
+    setMaxAngularVelocity (value: number): void { this._maxAngularVelocity = Math.max(0, value); }
+
+    afterStep (): void {
+        if (this._maxLinearVelocity > 0) {
+            this.getLinearVelocity(v3_0);
+            if (this._clampVelocity(v3_0, this._maxLinearVelocity)) this.setLinearVelocity(v3_0);
+        }
+        if (this._maxAngularVelocity > 0) {
+            this.getAngularVelocity(v3_0);
+            if (this._clampVelocity(v3_0, this._maxAngularVelocity)) this.setAngularVelocity(v3_0);
+        }
+    }
+
     setAllowSleep (v: boolean): void {
         if (!this._rigidBody.isDynamic) return;
         if (v) {
@@ -127,6 +147,8 @@ export class BulletRigidBody implements IRigidBody {
 
     private _isEnabled = false;
     private _isUsingCCD = false;
+    private _maxLinearVelocity = 0;
+    private _maxAngularVelocity = 0;
     private _sharedBody!: BulletSharedBody;
     private _rigidBody!: RigidBody;
 
@@ -315,6 +337,14 @@ export class BulletRigidBody implements IRigidBody {
 
     removeMask (v: number): void {
         this._sharedBody.collisionFilterMask &= ~v;
+    }
+
+    private _clampVelocity (value: Vec3, maximum: number): boolean {
+        const lengthSq = value.lengthSqr();
+        const maxSq = maximum * maximum;
+        if (lengthSq <= maxSq || lengthSq <= 0) return false;
+        Vec3.multiplyScalar(value, value, maximum / Math.sqrt(lengthSq));
+        return true;
     }
 
     protected _wakeUpIfSleep (): void {
