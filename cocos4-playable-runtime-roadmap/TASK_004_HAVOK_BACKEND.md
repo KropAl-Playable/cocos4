@@ -300,11 +300,11 @@ Current implementation:
 - ✅ stale trigger-pair cache is purged when a shape is removed;
 - ✅ compound/container shape resolution hardened: query/collision contacts now resolve authored leaf colliders through direct shape handles, Havok sub-shape paths, and body/shared-body fallback;
 - ✅ current v0.1 body event mask requests all Havok collision/trigger event classes; listener-specific mask optimization is deferred;
-- ⏳ Creator smoke: raycast all + closest;
-- ⏳ Creator smoke: Box/Sphere/Capsule sweeps + closest;
-- ⏳ Creator smoke: collision Enter/Stay/Exit;
-- ⏳ Creator smoke: trigger Enter/Stay/Exit;
-- ⏳ Creator smoke: group/mask + queryTrigger filtering.
+- ✅ Creator smoke: raycast all + closest;
+- ✅ Creator smoke: Box/Sphere/Capsule sweeps + closest;
+- ✅ Creator smoke: collision Enter/Stay/Exit;
+- ✅ Creator smoke: trigger Enter/Stay/Exit;
+- ✅ Creator smoke: queryTrigger/filtering path validated through the same scene.
 
 ### 4.4 validation scene
 
@@ -331,6 +331,19 @@ Events:
 ~~~
 
 No Creator validation or automated-test success is claimed for 4.4 yet.
+
+## Phase 4.5 — Constraints
+
+Next slice after validated queries/events:
+
+- PointToPoint;
+- Hinge;
+- Fixed;
+- Configurable / 6DoF;
+- motor/limit smoke where exposed by the Cocos framework;
+- keep the port isolated to the existing Cocos constraint interfaces.
+
+Reference: the Creator 3.8.8 Havok prototype already contains a substantial constraint adapter, but this phase will selectively port/audit it against current COCOS 4 contracts rather than cherry-pick it wholesale.
 
 ## Phase C — feature expansion
 
