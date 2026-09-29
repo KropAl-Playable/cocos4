@@ -298,6 +298,7 @@ Current implementation:
 - ✅ trigger Enter / Stay / Exit bridge exists;
 - ✅ collision contacts expose world/local points and normals through `HavokContact`;
 - ✅ stale trigger-pair cache is purged when a shape is removed;
+- ✅ compound/container shape resolution hardened: query/collision contacts now resolve authored leaf colliders through direct shape handles, Havok sub-shape paths, and body/shared-body fallback;
 - ✅ current v0.1 body event mask requests all Havok collision/trigger event classes; listener-specific mask optimization is deferred;
 - ⏳ Creator smoke: raycast all + closest;
 - ⏳ Creator smoke: Box/Sphere/Capsule sweeps + closest;
