@@ -75,8 +75,8 @@ export abstract class HavokConstraint implements IBaseConstraint {
         const [result, handle] = this.instance.HP_Constraint_Create();
         this._check(result, 'HP_Constraint_Create');
         this._impl = handle;
-        this._check(this.instance.HP_Constraint_SetParentBody(handle, this._bodyAHandle()), 'HP_Constraint_SetParentBody');
-        this._check(this.instance.HP_Constraint_SetChildBody(handle, this._bodyBHandle()), 'HP_Constraint_SetChildBody');
+        this._check(this.instance.HP_Constraint_SetParentBody(handle, this._parentBodyHandle()), 'HP_Constraint_SetParentBody');
+        this._check(this.instance.HP_Constraint_SetChildBody(handle, this._childBodyHandle()), 'HP_Constraint_SetChildBody');
         this._configure();
         this.setEnableCollision(this._component.enableCollision);
         this._check(this.instance.HP_Constraint_SetEnabled(handle, 1), 'HP_Constraint_SetEnabled');
@@ -89,13 +89,23 @@ export abstract class HavokConstraint implements IBaseConstraint {
         this._impl = null;
     }
 
-    protected _bodyAHandle (): HavokBodyId {
-        return this._component.attachedBody?.type === ERigidBodyType.STATIC ? FIXED_BODY : this._bodyA.impl;
+    protected _parentBodyHandle (): HavokBodyId {
+        if (this._swapStaticAttachedBody()) {
+            return (this._connectedBody!.body as HavokRigidBody).impl;
+        }
+        return this._bodyA.impl;
     }
 
-    protected _bodyBHandle (): HavokBodyId {
+    protected _childBodyHandle (): HavokBodyId {
+        if (this._swapStaticAttachedBody()) return FIXED_BODY;
         if (!this._connectedBody || this._connectedBody.type === ERigidBodyType.STATIC) return FIXED_BODY;
         return (this._connectedBody.body as HavokRigidBody).impl;
+    }
+
+    private _swapStaticAttachedBody (): boolean {
+        return this._component.attachedBody?.type === ERigidBodyType.STATIC
+            && !!this._connectedBody
+            && this._connectedBody.type !== ERigidBodyType.STATIC;
     }
 
     protected _setMode (axis: number, mode: EConstraintMode): void {
@@ -188,8 +198,29 @@ export abstract class HavokConstraint implements IBaseConstraint {
             copy3(this._axisYB, this._tmp1);
         }
 
-        this._check(this.instance.HP_Constraint_SetAnchorInParent(this._impl, this._pivotA, this._axisXA, this._axisYA), 'HP_Constraint_SetAnchorInParent');
-        this._check(this.instance.HP_Constraint_SetAnchorInChild(this._impl, this._pivotB, this._axisXB, this._axisYB), 'HP_Constraint_SetAnchorInChild');
+        if (this._swapStaticAttachedBody()) {
+            // Havok's fixed world body is reliable as the child endpoint. When the
+            // Cocos constraint component lives on a Static RigidBody, internally
+            // flip the pair: connected dynamic/kinematic body becomes the Havok
+            // parent and the authored static frame becomes the fixed-world child.
+            this._check(
+                this.instance.HP_Constraint_SetAnchorInParent(this._impl, this._pivotB, this._axisXB, this._axisYB),
+                'HP_Constraint_SetAnchorInParent',
+            );
+            this._check(
+                this.instance.HP_Constraint_SetAnchorInChild(this._impl, this._pivotA, this._axisXA, this._axisYA),
+                'HP_Constraint_SetAnchorInChild',
+            );
+        } else {
+            this._check(
+                this.instance.HP_Constraint_SetAnchorInParent(this._impl, this._pivotA, this._axisXA, this._axisYA),
+                'HP_Constraint_SetAnchorInParent',
+            );
+            this._check(
+                this.instance.HP_Constraint_SetAnchorInChild(this._impl, this._pivotB, this._axisXB, this._axisYB),
+                'HP_Constraint_SetAnchorInChild',
+            );
+        }
     }
 
     protected _check (result: HavokResult, operation: string): void {
