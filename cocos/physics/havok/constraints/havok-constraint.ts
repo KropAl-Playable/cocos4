@@ -9,6 +9,7 @@ import {
     Constraint,
     EConstraintMode,
     EDriverMode,
+    ERigidBodyType,
     HingeConstraint,
     PointToPointConstraint,
     RigidBody,
@@ -74,8 +75,8 @@ export abstract class HavokConstraint implements IBaseConstraint {
         const [result, handle] = this.instance.HP_Constraint_Create();
         this._check(result, 'HP_Constraint_Create');
         this._impl = handle;
-        this._check(this.instance.HP_Constraint_SetParentBody(handle, this._bodyA.impl), 'HP_Constraint_SetParentBody');
-        this._check(this.instance.HP_Constraint_SetChildBody(handle, this._bodyB()), 'HP_Constraint_SetChildBody');
+        this._check(this.instance.HP_Constraint_SetParentBody(handle, this._parentBodyHandle()), 'HP_Constraint_SetParentBody');
+        this._check(this.instance.HP_Constraint_SetChildBody(handle, this._childBodyHandle()), 'HP_Constraint_SetChildBody');
         this._configure();
         this.setEnableCollision(this._component.enableCollision);
         this._check(this.instance.HP_Constraint_SetEnabled(handle, 1), 'HP_Constraint_SetEnabled');
@@ -88,8 +89,23 @@ export abstract class HavokConstraint implements IBaseConstraint {
         this._impl = null;
     }
 
-    protected _bodyB (): HavokBodyId {
-        return (this._connectedBody?.body as HavokRigidBody | null)?.impl ?? FIXED_BODY;
+    protected _parentBodyHandle (): HavokBodyId {
+        if (this._swapStaticAttachedBody()) {
+            return (this._connectedBody!.body as HavokRigidBody).impl;
+        }
+        return this._bodyA.impl;
+    }
+
+    protected _childBodyHandle (): HavokBodyId {
+        if (this._swapStaticAttachedBody()) return FIXED_BODY;
+        if (!this._connectedBody || this._connectedBody.type === ERigidBodyType.STATIC) return FIXED_BODY;
+        return (this._connectedBody.body as HavokRigidBody).impl;
+    }
+
+    private _swapStaticAttachedBody (): boolean {
+        return this._component.attachedBody?.type === ERigidBodyType.STATIC
+            && !!this._connectedBody
+            && this._connectedBody.type !== ERigidBodyType.STATIC;
     }
 
     protected _setMode (axis: number, mode: EConstraintMode): void {
@@ -117,17 +133,32 @@ export abstract class HavokConstraint implements IBaseConstraint {
     ): void {
         if (!this._impl) return;
         const nodeA = this._bodyA.rigidBody.node;
-        const scaleA = nodeA.worldScale;
-        this._pivotA[0] = pivotA.x * scaleA.x;
-        this._pivotA[1] = pivotA.y * scaleA.y;
-        this._pivotA[2] = pivotA.z * scaleA.z;
+        const bodyAIsStatic = this._component.attachedBody?.type === ERigidBodyType.STATIC;
+        if (bodyAIsStatic) {
+            // A static Cocos body is represented by Havok's fixed-world endpoint
+            // whenever the other endpoint is movable. Its frame therefore has to
+            // be expressed in world space rather than in the static body's local space.
+            Vec3.transformRTS(this._tmp0, pivotA, nodeA.worldRotation, nodeA.worldPosition, nodeA.worldScale);
+            copy3(this._pivotA, this._tmp0);
+            Vec3.transformQuat(this._tmp0, axis, nodeA.worldRotation);
+            Vec3.transformQuat(this._tmp1, secondary, nodeA.worldRotation);
+            Vec3.normalize(this._tmp0, this._tmp0);
+            Vec3.normalize(this._tmp1, this._tmp1);
+            copy3(this._axisXA, this._tmp0);
+            copy3(this._axisYA, this._tmp1);
+        } else {
+            const scaleA = nodeA.worldScale;
+            this._pivotA[0] = pivotA.x * scaleA.x;
+            this._pivotA[1] = pivotA.y * scaleA.y;
+            this._pivotA[2] = pivotA.z * scaleA.z;
 
-        Vec3.normalize(this._tmp0, axis);
-        Vec3.normalize(this._tmp1, secondary);
-        copy3(this._axisXA, this._tmp0);
-        copy3(this._axisYA, this._tmp1);
+            Vec3.normalize(this._tmp0, axis);
+            Vec3.normalize(this._tmp1, secondary);
+            copy3(this._axisXA, this._tmp0);
+            copy3(this._axisYA, this._tmp1);
+        }
 
-        if (this._connectedBody) {
+        if (this._connectedBody && this._connectedBody.type !== ERigidBodyType.STATIC) {
             const nodeB = this._connectedBody.node;
             if (autoPivotB) {
                 Vec3.transformRTS(this._tmp0, pivotA, nodeA.worldRotation, nodeA.worldPosition, nodeA.worldScale);
@@ -149,12 +180,23 @@ export abstract class HavokConstraint implements IBaseConstraint {
             copy3(this._axisXB, this._tmp0);
             copy3(this._axisYB, this._tmp1);
         } else {
-            // Cocos constraints with connectedBody === null are anchored to the
-            // fixed world at the current world-space position of pivotA.
-            // This matches Bullet/Cannon semantics; pivotB is not interpreted as
-            // an absolute world coordinate in this case.
-            Vec3.transformRTS(this._tmp0, pivotA, nodeA.worldRotation, nodeA.worldPosition, nodeA.worldScale);
-            copy3(this._pivotB, this._tmp0);
+            if (this._connectedBody) {
+                // Static connected bodies are mapped to Havok's fixed world body.
+                // Preserve Cocos' authored pivotB by converting that frame to world space.
+                const nodeB = this._connectedBody.node;
+                if (autoPivotB) {
+                    Vec3.transformRTS(this._tmp0, pivotA, nodeA.worldRotation, nodeA.worldPosition, nodeA.worldScale);
+                } else {
+                    Vec3.transformRTS(this._tmp0, pivotB, nodeB.worldRotation, nodeB.worldPosition, nodeB.worldScale);
+                }
+                copy3(this._pivotB, this._tmp0);
+            } else {
+                // Cocos constraints with connectedBody === null are anchored to the
+                // fixed world at the current world-space position of pivotA.
+                // pivotB is not interpreted as an absolute world coordinate.
+                Vec3.transformRTS(this._tmp0, pivotA, nodeA.worldRotation, nodeA.worldPosition, nodeA.worldScale);
+                copy3(this._pivotB, this._tmp0);
+            }
             Vec3.transformQuat(this._tmp0, axis, nodeA.worldRotation);
             Vec3.transformQuat(this._tmp1, secondary, nodeA.worldRotation);
             Vec3.normalize(this._tmp0, this._tmp0);
@@ -163,14 +205,28 @@ export abstract class HavokConstraint implements IBaseConstraint {
             copy3(this._axisYB, this._tmp1);
         }
 
-        this._check(
-            this.instance.HP_Constraint_SetAnchorInParent(this._impl, this._pivotA, this._axisXA, this._axisYA),
-            'HP_Constraint_SetAnchorInParent',
-        );
-        this._check(
-            this.instance.HP_Constraint_SetAnchorInChild(this._impl, this._pivotB, this._axisXB, this._axisYB),
-            'HP_Constraint_SetAnchorInChild',
-        );
+        if (this._swapStaticAttachedBody()) {
+            // Havok's fixed world body is reliable as the child endpoint. When the
+            // component is authored on a Static RigidBody, keep Cocos semantics by
+            // swapping only the internal Havok endpoints and their anchor frames.
+            this._check(
+                this.instance.HP_Constraint_SetAnchorInParent(this._impl, this._pivotB, this._axisXB, this._axisYB),
+                'HP_Constraint_SetAnchorInParent',
+            );
+            this._check(
+                this.instance.HP_Constraint_SetAnchorInChild(this._impl, this._pivotA, this._axisXA, this._axisYA),
+                'HP_Constraint_SetAnchorInChild',
+            );
+        } else {
+            this._check(
+                this.instance.HP_Constraint_SetAnchorInParent(this._impl, this._pivotA, this._axisXA, this._axisYA),
+                'HP_Constraint_SetAnchorInParent',
+            );
+            this._check(
+                this.instance.HP_Constraint_SetAnchorInChild(this._impl, this._pivotB, this._axisXB, this._axisYB),
+                'HP_Constraint_SetAnchorInChild',
+            );
+        }
     }
 
     protected _check (result: HavokResult, operation: string): void {
