@@ -653,7 +653,8 @@ export class HavokWorld implements IPhysicsWorld {
         for (let eventId = first; eventId; eventId = this._instance.HP_World_GetNextTriggerEvent(this._getWorld(), eventId)) {
             const [eventResult, event] = this._instance.HP_Event_AsTrigger(eventId);
             assertHavokResult(this._instance, eventResult, 'HP_Event_AsTrigger');
-            const shapeA = this.shapeRegistry.getValue(event[2]); const shapeB = this.shapeRegistry.getValue(event[4]);
+            const shapeA = this._shapeFromTriggerHandles(event[1], event[2]);
+            const shapeB = this._shapeFromTriggerHandles(event[3], event[4]);
             if (!shapeA || !shapeB) continue;
             const key = this._pairKey(event[2], event[4]);
             if (event[0] === this._instance.EventType.TRIGGER_ENTERED) {
@@ -673,7 +674,50 @@ export class HavokWorld implements IPhysicsWorld {
         const av = a[0]; const bv = b[0]; return av < bv ? `${av}:${bv}` : `${bv}:${av}`;
     }
     private _shapeFromContact (contact: HavokContactPoint): HavokShape | undefined {
-        return this.shapeRegistry.getValue(contact[1]) || this.shapeRegistry.getValue([contact[2][0]]);
+        // Havok may report either the leaf shape, the compound/container shape,
+        // or only a sub-shape path depending on query/event type. Resolve in
+        // progressively broader ways so Cocos always gets the authored Collider.
+        const direct = this.shapeRegistry.getValue(contact[1]);
+        if (direct) return direct;
+
+        const path = contact[2];
+        for (let i = 0; i < path.length; i++) {
+            const byHandle = this.shapeRegistry.getValue([path[i]]);
+            if (byHandle) return byHandle;
+        }
+
+        const owner = this.bodyRegistry.getValue(contact[0]);
+        if (owner instanceof HavokSharedBody) {
+            const byPath = this._shapeFromSharedBodyPath(owner, path);
+            if (byPath) return byPath;
+        }
+
+        return undefined;
+    }
+
+    private _shapeFromSharedBodyPath (body: HavokSharedBody, path: readonly bigint[]): HavokShape | undefined {
+        if (body.shapes.length === 1) return body.shapes[0];
+
+        // Some Havok compound paths expose child indices rather than leaf handles.
+        // Accept both zero-based and one-based forms defensively.
+        for (let i = path.length - 1; i >= 0; i--) {
+            const raw = Number(path[i]);
+            if (!Number.isSafeInteger(raw)) continue;
+            if (raw >= 0 && raw < body.shapes.length) return body.shapes[raw];
+            const oneBased = raw - 1;
+            if (oneBased >= 0 && oneBased < body.shapes.length) return body.shapes[oneBased];
+        }
+
+        return undefined;
+    }
+
+    private _shapeFromTriggerHandles (bodyId: HavokBodyId, shapeId: HavokShapeId): HavokShape | undefined {
+        const direct = this.shapeRegistry.getValue(shapeId);
+        if (direct) return direct;
+
+        const owner = this.bodyRegistry.getValue(bodyId);
+        if (owner instanceof HavokSharedBody && owner.shapes.length === 1) return owner.shapes[0];
+        return undefined;
     }
 }
 
