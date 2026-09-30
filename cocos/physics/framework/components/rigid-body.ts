@@ -629,16 +629,48 @@ export class RigidBody extends Component {
     protected onEnable (): void {
         if (!this._body) return;
         this._body.onEnable!();
-        this._applyGravitySettings();
-        this._applyLinearConstraints();
-        this._applyAngularConstraints();
-        this._body.setSleepThreshold(this._sleepThreshold);
-        this._body.useCCD(this._useCCD);
-        if (this._body.setAutomaticCenterOfMass) this._body.setAutomaticCenterOfMass(this._automaticCenterOfMass);
-        if (!this._automaticCenterOfMass && this._body.setCenterOfMass) this._body.setCenterOfMass(this._centerOfMass);
-        this._applyInertiaSettings();
-        this._body.setMaxLinearVelocity?.(this._maxLinearVelocity);
-        this._body.setMaxAngularVelocity?.(this._maxAngularVelocity);
+
+        if (selector.id === 'havok') {
+            // Havok's adapter relies on the framework-owned extended body state.
+            this._applyGravitySettings();
+            this._applyLinearConstraints();
+            this._applyAngularConstraints();
+            this._body.setSleepThreshold(this._sleepThreshold);
+            this._body.useCCD(this._useCCD);
+            if (this._body.setAutomaticCenterOfMass) this._body.setAutomaticCenterOfMass(this._automaticCenterOfMass);
+            if (!this._automaticCenterOfMass && this._body.setCenterOfMass) this._body.setCenterOfMass(this._centerOfMass);
+            this._applyInertiaSettings();
+            this._body.setMaxLinearVelocity?.(this._maxLinearVelocity);
+            this._body.setMaxAngularVelocity?.(this._maxAngularVelocity);
+            return;
+        }
+
+        // Preserve the legacy Cocos backend lifecycle for Bullet, PhysX and
+        // Cannon when all extended properties are at their neutral defaults.
+        // Their adapter onEnable() already applies mass, damping, factors and
+        // useGravity. Re-applying those properties from the framework changed
+        // long-standing simulation behaviour even for otherwise stock bodies.
+        if (this._useGravity && this._gravityScale !== 1 && this._body.setGravityScale) {
+            this._body.setGravityScale(this._gravityScale);
+        }
+        if (!this._useGravity) {
+            // The legacy adapter already applied useGravity(false). Keep this
+            // explicit only for backends that expose gravityScale but do not
+            // mirror useGravity internally.
+            if (this._body.setGravityScale) this._body.setGravityScale(0);
+        }
+
+        if (this._useCCD) this._body.useCCD(true);
+        if (this._sleepThreshold !== 0.1) this._body.setSleepThreshold(this._sleepThreshold);
+
+        if (!this._automaticCenterOfMass && this._body.setCenterOfMass) {
+            this._body.setAutomaticCenterOfMass?.(false);
+            this._body.setCenterOfMass(this._centerOfMass);
+        }
+        if (!this._automaticInertiaTensor) this._applyInertiaSettings();
+
+        if (this._maxLinearVelocity > 0) this._body.setMaxLinearVelocity?.(this._maxLinearVelocity);
+        if (this._maxAngularVelocity > 0) this._body.setMaxAngularVelocity?.(this._maxAngularVelocity);
     }
 
     protected onDisable (): void {
