@@ -3,7 +3,8 @@
  SPDX-License-Identifier: MIT
  */
 
-import { IVec3Like, Quat, toRadian, Vec3 } from '../../../core';
+import { Color, IVec3Like, Quat, toRadian, Vec3 } from '../../../core';
+import type { GeometryRenderer } from '../../../rendering/geometry-renderer';
 import {
     ConfigurableConstraint,
     Constraint,
@@ -22,10 +23,14 @@ import type {
 } from '../../spec/i-physics-constraint';
 import { HavokRigidBody } from '../havok-rigid-body';
 import type { HavokBodyId, HavokConstraintId, HavokModule, HavokResult, HavokVector3 } from '../havok-types';
-import { assertHavokResult } from '../havok-util';
+import { assertHavokResult, isHavokResultOk } from '../havok-util';
+import type { HavokWorld } from '../havok-world';
 
 const HAVOK_ZERO_ID = (globalThis as unknown as { BigInt: (value: number) => bigint }).BigInt(0);
 const FIXED_BODY: HavokBodyId = [HAVOK_ZERO_ID];
+const DEBUG_CONSTRAINT_COLOR = new Color(255, 255, 0, 255);
+const DEBUG_PARENT_COLOR = new Color(0, 255, 0, 255);
+const DEBUG_CHILD_COLOR = new Color(255, 128, 0, 255);
 
 function copy3 (out: HavokVector3, v: IVec3Like): void {
     out[0] = v.x; out[1] = v.y; out[2] = v.z;
@@ -50,6 +55,10 @@ export abstract class HavokConstraint implements IBaseConstraint {
     private readonly _tmp0 = new Vec3();
     private readonly _tmp1 = new Vec3();
     private readonly _inv = new Quat();
+    private readonly _debugParent = new Vec3();
+    private readonly _debugChild = new Vec3();
+    private readonly _debugAxis = new Vec3();
+    private readonly _debugRotation = new Quat();
 
     initialize (component: Constraint): void {
         this._component = component;
@@ -57,14 +66,67 @@ export abstract class HavokConstraint implements IBaseConstraint {
         this._connectedBody = component.connectedBody;
     }
 
-    onEnable (): void { this._enabled = true; this._create(); }
-    onDisable (): void { this._enabled = false; this._destroy(); }
-    onDestroy (): void { this._destroy(); this._connectedBody = null; }
+    onEnable (): void {
+        this._enabled = true;
+        (this._bodyA.sharedBody.world as HavokWorld).registerConstraintDebug(this);
+        this._create();
+    }
+    onDisable (): void {
+        this._enabled = false;
+        (this._bodyA.sharedBody.world as HavokWorld).unregisterConstraintDebug(this);
+        this._destroy();
+    }
+    onDestroy (): void {
+        (this._bodyA.sharedBody.world as HavokWorld).unregisterConstraintDebug(this);
+        this._destroy();
+        this._connectedBody = null;
+    }
     setConnectedBody (body: RigidBody | null): void { this._connectedBody = body; if (this._enabled) this._create(); }
 
     setEnableCollision (value: boolean): void {
         if (!this._impl) return;
         this._check(this.instance.HP_Constraint_SetCollisionsEnabled(this._impl, value ? 1 : 0), 'HP_Constraint_SetCollisionsEnabled');
+    }
+
+    debugDraw (renderer: GeometryRenderer, size: number): void {
+        if (!this._impl) return;
+
+        const parentBody = this._bodyA.impl;
+        const childBody = this._bodyB();
+        if (!this._debugAnchorWorld(parentBody, this._pivotA, this._debugParent)) return;
+
+        if (childBody[0] === HAVOK_ZERO_ID) {
+            this._debugChild.set(this._pivotB[0], this._pivotB[1], this._pivotB[2]);
+        } else if (!this._debugAnchorWorld(childBody, this._pivotB, this._debugChild)) {
+            return;
+        }
+
+        renderer.addCross(this._debugParent, size, DEBUG_PARENT_COLOR);
+        renderer.addCross(this._debugChild, size, DEBUG_CHILD_COLOR);
+        renderer.addLine(this._debugParent, this._debugChild, DEBUG_CONSTRAINT_COLOR);
+
+        const [result, transform] = this.instance.HP_Body_GetQTransform(parentBody);
+        if (isHavokResultOk(this.instance, result)) {
+            this._debugRotation.set(transform[1][0], transform[1][1], transform[1][2], transform[1][3]);
+            this._debugAxis.set(this._axisXA[0], this._axisXA[1], this._axisXA[2]);
+            Vec3.transformQuat(this._debugAxis, this._debugAxis, this._debugRotation);
+            Vec3.normalize(this._debugAxis, this._debugAxis);
+            Vec3.multiplyScalar(this._debugAxis, this._debugAxis, Math.max(size, 0.1) * 2);
+            Vec3.add(this._debugAxis, this._debugAxis, this._debugParent);
+            renderer.addLine(this._debugParent, this._debugAxis, DEBUG_PARENT_COLOR);
+        }
+    }
+
+    private _debugAnchorWorld (body: HavokBodyId, pivot: HavokVector3, out: Vec3): boolean {
+        const [result, transform] = this.instance.HP_Body_GetQTransform(body);
+        if (!isHavokResultOk(this.instance, result)) return false;
+        out.set(pivot[0], pivot[1], pivot[2]);
+        this._debugRotation.set(transform[1][0], transform[1][1], transform[1][2], transform[1][3]);
+        Vec3.transformQuat(out, out, this._debugRotation);
+        out.x += transform[0][0];
+        out.y += transform[0][1];
+        out.z += transform[0][2];
+        return true;
     }
 
     protected abstract _configure (): void;
