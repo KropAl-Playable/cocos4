@@ -1,5 +1,35 @@
 # Task 004 — Havok Backend Feasibility
 
+## Closure status
+
+**Task 004 is closed as v0.1 functional complete.**
+
+Validated in Creator on the COCOS 4 fork:
+
+- Havok backend registration/loading and runtime initialization;
+- dynamic/static rigid bodies and primitive collisions;
+- Box / Sphere / Capsule / Cylinder and production convex MeshCollider path;
+- raycast, closest raycast, Box/Sphere/Capsule sweeps, collision events and trigger events;
+- PointToPoint, Hinge, Fixed and Configurable constraints;
+- Hinge axis/anchor correctness, including non-cardinal axes;
+- extended RigidBody authoring for Havok;
+- PhysicsMaterial restitution/combine authoring;
+- Havok physics debug draw diagnostics;
+- Bullet / PhysX / Cannon baseline regression after the framework expansion;
+- Legacy/Havok grouping in the RigidBody Inspector without changing serialized field names.
+
+Deferred/non-blocking follow-up:
+
+- non-convex dynamic triangle-mesh production support;
+- exact Havok solver-level axis locks;
+- optional Cone wrapper;
+- benchmark matrix, startup timing and build-size measurements using the dedicated benchmark kit;
+- ragdoll/vehicle helpers only if a concrete production use-case justifies them.
+
+The next active roadmap item is **Task 005 — GPU Particles**.
+
+---
+
 ## Objective
 
 Port and re-validate the existing Creator 3.8.8 Havok prototype from
