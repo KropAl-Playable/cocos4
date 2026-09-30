@@ -4,7 +4,7 @@
  */
 
 import { Mesh } from '../../../3d/assets';
-import { geometry, IVec3Like, Vec3, warn } from '../../../core';
+import { geometry, IVec3Like, Quat, Vec3, warn } from '../../../core';
 import { PrimitiveMode } from '../../../gfx';
 import {
     BoxCollider,
@@ -29,6 +29,11 @@ import type { HavokWorld } from '../havok-world';
 const MIN_SIZE = 0.0001;
 const IDENTITY_ROTATION: [number, number, number, number] = [0, 0, 0, 1];
 const HULL_POSITION_CACHE = new WeakMap<Mesh, number[]>();
+const AABB_LOCAL_CENTER = new Vec3();
+const AABB_LOCAL_HALF = new Vec3();
+const AABB_WORLD_CENTER = new Vec3();
+const AABB_ROTATED_CENTER = new Vec3();
+const AABB_ROTATION = new Quat();
 
 function positive (value: number): number { return Math.max(MIN_SIZE, Math.abs(value)); }
 
@@ -120,11 +125,118 @@ export abstract class HavokShape implements IBaseShape {
     }
     setCenter (_value: IVec3Like): void { this._recreate(); }
     getAABB (out: geometry.AABB): void {
-        const bounds = this._collider.worldBounds as geometry.AABB;
-        Vec3.copy(out.center, bounds.center);
-        Vec3.copy(out.halfExtents, bounds.halfExtents);
+        this._getLocalBounds(AABB_LOCAL_CENTER, AABB_LOCAL_HALF);
+
+        const node = this._collider.node;
+        const scale = node.worldScale;
+
+        // Collider center/local geometry are authored in node local space.
+        AABB_WORLD_CENTER.set(
+            AABB_LOCAL_CENTER.x * scale.x,
+            AABB_LOCAL_CENTER.y * scale.y,
+            AABB_LOCAL_CENTER.z * scale.z,
+        );
+        Quat.copy(AABB_ROTATION, node.worldRotation);
+        Vec3.transformQuat(AABB_ROTATED_CENTER, AABB_WORLD_CENTER, AABB_ROTATION);
+        Vec3.add(out.center, node.worldPosition, AABB_ROTATED_CENTER);
+
+        const hx = Math.abs(AABB_LOCAL_HALF.x * scale.x);
+        const hy = Math.abs(AABB_LOCAL_HALF.y * scale.y);
+        const hz = Math.abs(AABB_LOCAL_HALF.z * scale.z);
+
+        // Rotate the local OBB extents into a conservative world-space AABB.
+        const x = AABB_ROTATION.x;
+        const y = AABB_ROTATION.y;
+        const z = AABB_ROTATION.z;
+        const w = AABB_ROTATION.w;
+        const m00 = 1 - 2 * (y * y + z * z);
+        const m01 = 2 * (x * y - z * w);
+        const m02 = 2 * (x * z + y * w);
+        const m10 = 2 * (x * y + z * w);
+        const m11 = 1 - 2 * (x * x + z * z);
+        const m12 = 2 * (y * z - x * w);
+        const m20 = 2 * (x * z - y * w);
+        const m21 = 2 * (y * z + x * w);
+        const m22 = 1 - 2 * (x * x + y * y);
+
+        out.halfExtents.set(
+            Math.abs(m00) * hx + Math.abs(m01) * hy + Math.abs(m02) * hz,
+            Math.abs(m10) * hx + Math.abs(m11) * hy + Math.abs(m12) * hz,
+            Math.abs(m20) * hx + Math.abs(m21) * hy + Math.abs(m22) * hz,
+        );
     }
-    getBoundingSphere (out: geometry.Sphere): void { geometry.AABB.toBoundingSphere(out, this._collider.worldBounds as geometry.AABB); }
+
+    getBoundingSphere (out: geometry.Sphere): void {
+        const aabb = new geometry.AABB();
+        this.getAABB(aabb);
+        geometry.AABB.toBoundingSphere(out, aabb);
+    }
+
+    private _getLocalBounds (center: Vec3, half: Vec3): void {
+        Vec3.copy(center, this._collider.center);
+
+        if (this._collider instanceof BoxCollider) {
+            half.set(
+                Math.abs(this._collider.size.x) * 0.5,
+                Math.abs(this._collider.size.y) * 0.5,
+                Math.abs(this._collider.size.z) * 0.5,
+            );
+            return;
+        }
+
+        if (this._collider instanceof SphereCollider) {
+            const r = Math.abs(this._collider.radius);
+            half.set(r, r, r);
+            return;
+        }
+
+        if (this._collider instanceof CapsuleCollider) {
+            const r = Math.abs(this._collider.radius);
+            const axialHalf = Math.abs(this._collider.cylinderHeight) * 0.5 + r;
+            if (this._collider.direction === EAxisDirection.X_AXIS) half.set(axialHalf, r, r);
+            else if (this._collider.direction === EAxisDirection.Z_AXIS) half.set(r, r, axialHalf);
+            else half.set(r, axialHalf, r);
+            return;
+        }
+
+        if (this._collider instanceof CylinderCollider) {
+            const r = Math.abs(this._collider.radius);
+            const axialHalf = Math.abs(this._collider.height) * 0.5;
+            if (this._collider.direction === EAxisDirection.X_AXIS) half.set(axialHalf, r, r);
+            else if (this._collider.direction === EAxisDirection.Z_AXIS) half.set(r, r, axialHalf);
+            else half.set(r, axialHalf, r);
+            return;
+        }
+
+        if (this._collider instanceof MeshCollider && this._collider.mesh) {
+            const positions = this._getPositions(this._collider.mesh);
+            if (positions.length >= 3) {
+                let minX = positions[0]; let minY = positions[1]; let minZ = positions[2];
+                let maxX = minX; let maxY = minY; let maxZ = minZ;
+                for (let i = 3; i + 2 < positions.length; i += 3) {
+                    const px = positions[i];
+                    const py = positions[i + 1];
+                    const pz = positions[i + 2];
+                    if (px < minX) minX = px; if (px > maxX) maxX = px;
+                    if (py < minY) minY = py; if (py > maxY) maxY = py;
+                    if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
+                }
+                center.set(
+                    this._collider.center.x + (minX + maxX) * 0.5,
+                    this._collider.center.y + (minY + maxY) * 0.5,
+                    this._collider.center.z + (minZ + maxZ) * 0.5,
+                );
+                half.set(
+                    (maxX - minX) * 0.5,
+                    (maxY - minY) * 0.5,
+                    (maxZ - minZ) * 0.5,
+                );
+                return;
+            }
+        }
+
+        half.set(0, 0, 0);
+    }
     updateEventListener (): void { /* Event masks are installed in milestone 4. */ }
     setGroup (value: number): void { this._sharedBody.group = value; }
     getGroup (): number { return this._sharedBody.group; }
