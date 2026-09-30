@@ -154,6 +154,19 @@ export abstract class HavokConstraint implements IBaseConstraint {
         return (this._connectedBody?.body as HavokRigidBody | null)?.impl ?? FIXED_BODY;
     }
 
+    protected _nativeAxis (axis: number): number {
+        const axes = this.instance.ConstraintAxis;
+        switch (axis) {
+        case 0: return axes.LINEAR_X;
+        case 1: return axes.LINEAR_Y;
+        case 2: return axes.LINEAR_Z;
+        case 3: return axes.ANGULAR_X;
+        case 4: return axes.ANGULAR_Y;
+        case 5: return axes.ANGULAR_Z;
+        default: return axis;
+        }
+    }
+
     protected _setMode (axis: number, mode: EConstraintMode): void {
         if (!this._impl) return;
         const hkMode = mode === EConstraintMode.LOCKED
@@ -161,13 +174,17 @@ export abstract class HavokConstraint implements IBaseConstraint {
             : mode === EConstraintMode.LIMITED
                 ? this.instance.ConstraintAxisLimitMode.LIMITED
                 : this.instance.ConstraintAxisLimitMode.FREE;
-        this._check(this.instance.HP_Constraint_SetAxisMode(this._impl, axis, hkMode), 'HP_Constraint_SetAxisMode');
+        this._check(
+            this.instance.HP_Constraint_SetAxisMode(this._impl, this._nativeAxis(axis), hkMode),
+            'HP_Constraint_SetAxisMode',
+        );
     }
 
     protected _setLimit (axis: number, lower: number, upper: number): void {
         if (!this._impl) return;
-        this._check(this.instance.HP_Constraint_SetAxisMinLimit(this._impl, axis, lower), 'HP_Constraint_SetAxisMinLimit');
-        this._check(this.instance.HP_Constraint_SetAxisMaxLimit(this._impl, axis, upper), 'HP_Constraint_SetAxisMaxLimit');
+        const hkAxis = this._nativeAxis(axis);
+        this._check(this.instance.HP_Constraint_SetAxisMinLimit(this._impl, hkAxis, lower), 'HP_Constraint_SetAxisMinLimit');
+        this._check(this.instance.HP_Constraint_SetAxisMaxLimit(this._impl, hkAxis, upper), 'HP_Constraint_SetAxisMaxLimit');
     }
 
     protected _setAnchor (
@@ -303,10 +320,13 @@ export class HavokHingeConstraint extends HavokConstraint implements IHingeConst
         Vec3.normalize(this._secondary, this._secondary);
         this._setAnchor(this._a, this._b, this._axis, this._secondary);
 
-        for (let axis = 0; axis < 3; axis++) this._setMode(axis, EConstraintMode.LOCKED);
-        this._setMode(3, EConstraintMode.FREE);
-        this._setMode(4, EConstraintMode.LOCKED);
-        this._setMode(5, EConstraintMode.LOCKED);
+        const axes = this.instance.ConstraintAxis;
+        this._setMode(axes.LINEAR_X, EConstraintMode.LOCKED);
+        this._setMode(axes.LINEAR_Y, EConstraintMode.LOCKED);
+        this._setMode(axes.LINEAR_Z, EConstraintMode.LOCKED);
+        this._setMode(axes.ANGULAR_X, EConstraintMode.FREE);
+        this._setMode(axes.ANGULAR_Y, EConstraintMode.LOCKED);
+        this._setMode(axes.ANGULAR_Z, EConstraintMode.LOCKED);
         this._syncLimit();
         this._syncMotor();
     }
