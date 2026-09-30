@@ -33,6 +33,7 @@ import {
     executionOrder,
     tooltip,
     displayOrder,
+    group,
     visible,
     type,
     serializable,
@@ -74,6 +75,7 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置分组。
      */
+    @group('Legacy')
     @type(PhysicsSystem.PhysicsGroup)
     @displayOrder(-2)
     @tooltip('i18n:physics3d.rigidbody.group')
@@ -96,6 +98,7 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置刚体类型。
      */
+    @group('Legacy')
     @type(ERigidBodyType)
     @displayOrder(-1)
     @tooltip('i18n:physics3d.rigidbody.type')
@@ -115,6 +118,7 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置刚体的质量。
      */
+    @group('Legacy')
     @visible(isDynamicBody)
     @displayOrder(0)
     @tooltip('i18n:physics3d.rigidbody.mass')
@@ -136,6 +140,7 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置是否允许休眠。
      */
+    @group('Legacy')
     @visible(isDynamicBody)
     @displayOrder(0.5)
     @tooltip('i18n:physics3d.rigidbody.allowSleep')
@@ -154,6 +159,7 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置线性阻尼。
      */
+    @group('Legacy')
     @visible(isDynamicBody)
     @displayOrder(1)
     @tooltip('i18n:physics3d.rigidbody.linearDamping')
@@ -173,6 +179,7 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置旋转阻尼。
      */
+    @group('Legacy')
     @visible(isDynamicBody)
     @displayOrder(2)
     @tooltip('i18n:physics3d.rigidbody.angularDamping')
@@ -192,6 +199,7 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置刚体是否使用重力。
      */
+    @group('Legacy')
     @visible(isDynamicBody)
     @displayOrder(4)
     @tooltip('i18n:physics3d.rigidbody.useGravity')
@@ -209,6 +217,7 @@ export class RigidBody extends Component {
      * Backends without native gravity scaling fall back to the legacy on/off behavior.
      * @zh 刚体重力倍率。0 表示禁用重力；不支持倍率的后端会退化为开关行为。
      */
+    @group('Havok')
     @visible(isDynamicBody)
     @displayOrder(4.5)
     @tooltip('i18n:physics3d.rigidbody.gravityScale')
@@ -225,6 +234,7 @@ export class RigidBody extends Component {
      * @en Whether collider geometry should determine the center of mass automatically.
      * @zh 是否由碰撞体几何自动计算质心。
      */
+    @group('Havok')
     @visible(isDynamicBody)
     @displayOrder(5)
     @tooltip('i18n:physics3d.rigidbody.automaticCenterOfMass')
@@ -242,6 +252,7 @@ export class RigidBody extends Component {
      * @en Local-space center of mass used when automaticCenterOfMass is disabled.
      * @zh 关闭自动质心后使用的本地空间质心。
      */
+    @group('Havok')
     @type(Vec3)
     @visible(isDynamicBody)
     @displayOrder(5.5)
@@ -296,6 +307,7 @@ export class RigidBody extends Component {
      * @en Whether attached collider geometry should determine inertia automatically.
      * @zh 是否根据附加碰撞体几何自动计算惯性张量。
      */
+    @group('Havok')
     @visible(isDynamicBody)
     @displayOrder(5.6)
     @tooltip('i18n:physics3d.rigidbody.automaticInertiaTensor')
@@ -312,6 +324,7 @@ export class RigidBody extends Component {
      * @en Principal inertia tensor used when automaticInertiaTensor is disabled.
      * @zh 关闭自动惯性张量后使用的主惯性张量。
      */
+    @group('Havok')
     @type(Vec3)
     @visible(isDynamicBody)
     @displayOrder(5.61)
@@ -329,6 +342,7 @@ export class RigidBody extends Component {
      * @en Rotation of the principal inertia tensor.
      * @zh 主惯性张量方向。
      */
+    @group('Havok')
     @type(Quat)
     @visible(isDynamicBody)
     @displayOrder(5.62)
@@ -348,6 +362,7 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置线性速度的因子，可以用来控制每个轴方向上的速度的缩放。
      */
+    @group('Legacy')
     @visible(isDynamicBody)
     @displayOrder(6)
     @tooltip('i18n:physics3d.rigidbody.linearFactor')
@@ -366,6 +381,7 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置旋转速度的因子，可以用来控制每个轴方向上的旋转速度的缩放。
      */
+    @group('Legacy')
     @visible(isDynamicBody)
     @displayOrder(7)
     @tooltip('i18n:physics3d.rigidbody.angularFactor')
@@ -382,6 +398,7 @@ export class RigidBody extends Component {
      * @en Maximum linear speed. Zero means unlimited.
      * @zh 最大线速度。0 表示不限制。
      */
+    @group('Havok')
     @visible(isDynamicBody)
     @displayOrder(7.2)
     @tooltip('i18n:physics3d.rigidbody.maxLinearVelocity')
@@ -398,6 +415,7 @@ export class RigidBody extends Component {
      * @en Maximum angular speed in radians per second. Zero means unlimited.
      * @zh 最大角速度（弧度/秒）。0 表示不限制。
      */
+    @group('Havok')
     @visible(isDynamicBody)
     @displayOrder(7.3)
     @tooltip('i18n:physics3d.rigidbody.maxAngularVelocity')
@@ -416,6 +434,7 @@ export class RigidBody extends Component {
      * @zh
      * 获取或设置进入休眠的速度临界值。
      */
+    @group('Havok')
     @visible(isDynamicBody)
     @displayOrder(8)
     @tooltip('i18n:physics3d.rigidbody.sleepThreshold')
@@ -434,6 +453,7 @@ export class RigidBody extends Component {
      * @zh
      * 开启或关闭连续碰撞检测。
      */
+    @group('Havok')
     @visible(isDynamicBody)
     @displayOrder(9)
     @tooltip('i18n:physics3d.rigidbody.useCCD')
