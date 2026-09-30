@@ -3,7 +3,9 @@
  SPDX-License-Identifier: MIT
  */
 
-import { geometry, IQuatLike, IVec3Like, RecyclePool, Vec3 } from '../../core';
+import { Color, geometry, IQuatLike, IVec3Like, RecyclePool, Vec3 } from '../../core';
+import { director } from '../../game';
+import type { GeometryRenderer } from '../../rendering/geometry-renderer';
 import type { Node } from '../../scene-graph';
 import type { Collider, CollisionEventType, ICollisionEvent, RigidBody, TriggerEventType } from '../framework';
 import { EPhysicsDrawFlags, PhysicsMaterial, PhysicsRayResult } from '../framework';
@@ -36,6 +38,8 @@ import type { HavokShape } from './shapes/havok-shape';
 const HAVOK_ZERO_ID = (globalThis as unknown as { BigInt: (value: number) => bigint }).BigInt(0);
 
 const QUERY_COLLECTOR_CAPACITY = 256;
+const DEBUG_AABB_COLOR = new Color(0, 255, 255, 255);
+const DEBUG_BODY_COLOR = new Color(255, 0, 255, 255);
 
 export interface IHavokBodySync {
     readonly bodyId: HavokBodyId;
@@ -44,6 +48,10 @@ export interface IHavokBodySync {
     refreshTransformOffset? (): void;
     beforeStep? (fixedTimeStep: number): void;
     afterStep? (): void;
+}
+
+export interface IHavokConstraintDebug {
+    debugDraw (renderer: GeometryRenderer, size: number): void;
 }
 
 export interface HavokPerformanceStats {
@@ -76,6 +84,10 @@ export class HavokWorld implements IPhysicsWorld {
 
     private readonly _instance: HavokModule;
     private readonly _bodies: IHavokBodySync[] = [];
+    private readonly _debugShapes = new Set<HavokShape>();
+    private readonly _debugConstraints = new Set<IHavokConstraintDebug>();
+    private readonly _debugAabb = new geometry.AABB();
+    private readonly _debugBodyPosition = new Vec3();
     private readonly _gravity: HavokVector3 = [0, -10, 0];
     private _world: HavokWorldId | null;
     private _queryCollector: HavokCollectorId | null;
@@ -231,6 +243,7 @@ export class HavokWorld implements IPhysicsWorld {
             this._performanceStats.skippedBodies = this._bodies.length - synchronized;
             this._performanceStats.wasmMemoryBytes = this._instance.HEAPU8.byteLength;
         }
+        this._debugDraw();
     }
 
     syncSceneToPhysics (): void {
@@ -470,13 +483,58 @@ export class HavokWorld implements IPhysicsWorld {
 
     registerShape (shape: HavokShape): void {
         if (shape.impl) this.shapeRegistry.register(shape, shape.impl, shape);
+        this._debugShapes.add(shape);
     }
 
     unregisterShape (shape: HavokShape): void {
         this.shapeRegistry.unregisterOwner(shape);
+        this._debugShapes.delete(shape);
         this._activeTriggers.forEach((pair, key): void => {
             if (pair[0] === shape || pair[1] === shape) this._activeTriggers.delete(key);
         });
+    }
+
+    registerConstraintDebug (constraint: IHavokConstraintDebug): void {
+        this._debugConstraints.add(constraint);
+    }
+
+    unregisterConstraintDebug (constraint: IHavokConstraintDebug): void {
+        this._debugConstraints.delete(constraint);
+    }
+
+    private _getDebugRenderer (): GeometryRenderer | null {
+        const cameras = director.root?.mainWindow?.cameras;
+        if (!cameras || cameras.length === 0 || !cameras[0]) return null;
+        cameras[0].initGeometryRenderer();
+        return cameras[0].geometryRenderer;
+    }
+
+    private _debugDraw (): void {
+        if (this.debugDrawFlags === EPhysicsDrawFlags.NONE) return;
+        const renderer = this._getDebugRenderer();
+        if (!renderer) return;
+
+        if ((this.debugDrawFlags & EPhysicsDrawFlags.AABB) || (this.debugDrawFlags & EPhysicsDrawFlags.WIRE_FRAME)) {
+            this._debugShapes.forEach((shape): void => {
+                shape.getAABB(this._debugAabb);
+                renderer.addBoundingBox(this._debugAabb, DEBUG_AABB_COLOR);
+            });
+        }
+
+        if (this.debugDrawFlags & EPhysicsDrawFlags.WIRE_FRAME) {
+            for (let i = 0; i < this._bodies.length; i++) {
+                const [result, transform] = this._instance.HP_Body_GetQTransform(this._bodies[i].bodyId);
+                if (!isHavokResultOk(this._instance, result)) continue;
+                this._debugBodyPosition.set(transform[0][0], transform[0][1], transform[0][2]);
+                renderer.addCross(this._debugBodyPosition, 0.2, DEBUG_BODY_COLOR);
+            }
+        }
+
+        if (this.debugDrawFlags & EPhysicsDrawFlags.CONSTRAINT) {
+            this._debugConstraints.forEach((constraint): void => {
+                constraint.debugDraw(renderer, this.debugDrawConstraintSize);
+            });
+        }
     }
 
     queryShapeProximity (
