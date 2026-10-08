@@ -238,7 +238,7 @@
             "dependentModules": ["2d"]
         },
         "marionette": {
-            "modules": ["animation"],
+            "modules": ["animation", "marionette"],
             "intrinsicFlags": {
                 "MARIONETTE": true
             }
