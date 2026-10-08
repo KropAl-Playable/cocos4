@@ -238,13 +238,14 @@
             "dependentModules": ["2d"]
         },
         "marionette": {
-            "modules": [],
+            "modules": ["animation"],
             "intrinsicFlags": {
                 "MARIONETTE": true
             }
         },
         "procedural-animation": {
             "modules": [],
+            "dependentModules": ["animation"],
             "intrinsicFlags": {
                 "PROCEDURAL_ANIMATION": true
             }
