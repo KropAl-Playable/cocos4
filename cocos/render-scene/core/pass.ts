@@ -645,7 +645,8 @@ export class Pass {
                 errorID(12107, info.program);
                 return;
             }
-            if (this._phaseID === r.INVALID_ID) {
+            if (this._phaseID === undefined || this._phaseID === r.INVALID_ID) {
+                error(`[Pass] Invalid render phase: program="${info.program}", pass="${String(info.pass)}", subpass="${String(info.subpass)}", phase="${String(info.phase)}", passID=${String(this._passID)}, subpassID=${String(this._subpassID)}, phaseID=${String(this._phaseID)}`);
                 errorID(12108, info.program);
                 return;
             }
