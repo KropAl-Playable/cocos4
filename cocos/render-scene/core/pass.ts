@@ -632,10 +632,21 @@ export class Pass {
                 this._subpassID = info._subpassID;
                 this._phaseID = info._phaseID;
             } else if (typeof info.phase === 'number') {
-                // Imported EffectAsset passes can contain a numeric layout-graph
-                // phase ID but are plain data, not initialized Pass objects.
+                // Imported EffectAsset passes are plain data, not initialized Pass objects.
+                // Resolve their numeric phase through the same layout-graph lookup
+                // used by WebProgramLibrary.addEffect(), rather than treating the
+                // numeric value as an absolute vertex descriptor.
                 this._passID = r.getPassID(info.pass);
-                this._phaseID = info.phase;
+                if (this._passID !== r.INVALID_ID) {
+                    if (info.subpass) {
+                        this._subpassID = r.getSubpassID(this._passID, info.subpass);
+                        if (this._subpassID !== r.INVALID_ID) {
+                            this._phaseID = r.getPhaseID(this._subpassID, info.phase);
+                        }
+                    } else {
+                        this._phaseID = r.getPhaseID(this._passID, info.phase);
+                    }
+                }
             } else {
                 this._passID = r.getPassID(info.pass);
                 if (this._passID !== r.INVALID_ID) {
