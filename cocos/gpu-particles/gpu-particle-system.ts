@@ -4,6 +4,7 @@
  * No per-particle CPU update, Node, readback or physics-world contact.
  */
 import { _decorator, CCInteger, CCFloat, Vec3, Vec4, warn } from '../core';
+import { EDITOR } from 'internal:constants';
 import { Material } from '../asset/assets/material';
 import { Mesh } from '../3d/assets/mesh';
 import { Component } from '../scene-graph/component';
@@ -57,11 +58,17 @@ export class GPUParticleSystem extends Component {
     private _time = 0;
 
     protected onLoad (): void {
-        // Intentional: WebGL1 is outside the scope of Task 005 v0.1.
-        if (deviceManager.gfxDevice.api !== API.WEBGL2) {
-            warn('GPUParticleSystem requires WebGL2; emitter disabled.');
+        // Editor's Scene view may use a different backend than Web Preview.
+        // Build the mesh for inspection in editor even when its graphics backend
+        // is not WebGL2; enforce WebGL2 strictly in runtime.
+        const api = deviceManager.gfxDevice?.api;
+        if (!EDITOR && api !== API.WEBGL2) {
+            warn('GPUParticleSystem requires WebGL2 at runtime; emitter disabled.');
             this.enabled = false;
             return;
+        }
+        if (EDITOR && api !== API.WEBGL2) {
+            warn('GPUParticleSystem: Scene Editor is not using WebGL2; mesh will be created, but particles may require a WebGL2 Preview to render.');
         }
         if (!this.particleMaterial) {
             warn('GPUParticleSystem requires the Task 005 GPU particle material.');
