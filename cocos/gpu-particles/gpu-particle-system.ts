@@ -76,6 +76,14 @@ export class GPUParticleSystem extends Component {
         this._renderer = this.getComponent(MeshRenderer) || this.addComponent(MeshRenderer);
         this._mesh = this._buildMesh();
         this._renderer.mesh = this._mesh;
+        console.info('[GPUParticleSystem] mesh created', {
+            api: deviceManager.gfxDevice?.api,
+            count: Math.max(1, Math.min(20000, Math.floor(this.capacity))),
+            vertices: this._mesh.struct.vertexBundles[0]?.view.count,
+            indices: this._mesh.struct.primitives[0]?.indexView?.count,
+            meshAssigned: this._renderer.mesh === this._mesh,
+            materialAssigned: !!this.particleMaterial,
+        });
         this._applyMaterial();
     }
 
