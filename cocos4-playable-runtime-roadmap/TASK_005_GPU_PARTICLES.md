@@ -1,5 +1,34 @@
 # Task 005 — GPU Particles
 
+## M5.1 implementation status (2026-10-09)
+
+Experimental analytical WebGL2 spike committed to feat/havok-backend; **not yet validated in Creator**.
+
+- Independent GPUParticleSystem component with seeded, fixed-capacity quad mesh.
+- Dedicated WebGL2 shader: billboard, analytical gravity/initial-velocity/drag approximation, cyclic lifetime, alpha fade.
+- Public exports/gpu-particles.ts and opt-in GPU Particles (Experimental) Feature Cropping.
+- No CPU-side per-particle update; CPU advances one uniform per emitter.
+
+### Creator smoke test
+
+1. Enable 3D, gfx-webgl2, and GPU Particles (Experimental) in Feature Cropping.
+2. Import/create a Material using advanced/playable-gpu-particles.effect.
+3. Add GPU Particle System (Experimental) to an empty node; assign the material.
+4. Check 1k, 5k, 10k particles in Web Mobile build, after clearing the global engine cache if feature modules changed.
+5. Capture render/compile errors, p50/p95 frame times, draw calls, device GPU, and compressed single-HTML delta.
+
+### Explicit known limitations
+
+- Shader compilation and runtime behavior have not been tested in Cocos Creator yet.
+- Shader displacement exceeds static mesh bounds; conservative bounds/culling solution pending.
+- Billboard only; stretched and mesh particles plus analytical plane/sphere/box collisions are M5.2.
+- No Transform Feedback or mutable simulation state yet; this is an analytical GPU rendering spike.
+- Changes to serialized settings after startup require rebuilding mesh/material.
+- Drag only damps initial velocity; gravity is ballistic, not drag-integrated.
+- WebGL1 unsupported: component disables itself.
+
+---
+
 ## Objective
 
 Build a compact, reusable GPU-driven particle path for COCOS 4 that can render substantially richer playable-ad VFX without CPU-side per-particle updates.
