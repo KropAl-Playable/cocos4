@@ -1066,8 +1066,20 @@ export class WebProgramLibrary implements ProgramLibrary {
     // get IProgramInfo
     getProgramInfo (phaseID: number, programName: string): IProgramInfo {
         assert(phaseID !== INVALID_ID);
-        const group = this.phases.get(phaseID)!;
-        const info = group.programInfos.get(programName)!;
+        const group = this.phases.get(phaseID);
+        if (!group) {
+            const availablePhases = Array.from(this.phases.keys()).join(', ');
+            const message = `[WebProgramLibrary] Missing render phase ${phaseID} for shader "${programName}". Registered phases: [${availablePhases}]. Check effect pass/phase registration and material dependencies.`;
+            error(message);
+            throw new Error(message);
+        }
+        const info = group.programInfos.get(programName);
+        if (!info) {
+            const availablePrograms = Array.from(group.programInfos.keys()).join(', ');
+            const message = `[WebProgramLibrary] Missing shader "${programName}" in phase ${phaseID}. Registered programs: [${availablePrograms}]. Check effect import and program compilation.`;
+            error(message);
+            throw new Error(message);
+        }
         return info.programInfo;
     }
 
