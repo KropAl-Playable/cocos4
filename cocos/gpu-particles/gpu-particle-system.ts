@@ -11,7 +11,7 @@ import { MeshRenderer } from '../3d/framework/mesh-renderer';
 import { createMesh } from '../3d/misc/create-mesh';
 import { deviceManager, API } from '../gfx';
 
-const { ccclass, menu, property, type } = _decorator;
+const { ccclass, menu, property, executeInEditMode } = _decorator;
 
 function xorshift32 (value: number): number {
     let x = value | 0;
@@ -22,6 +22,7 @@ function xorshift32 (value: number): number {
 }
 
 @ccclass('cc.GPUParticleSystem')
+@executeInEditMode(true)
 @menu('Effects/GPU Particle System (Experimental)')
 export class GPUParticleSystem extends Component {
     @property({ type: CCInteger, range: [1, 20000, 1] })
@@ -39,10 +40,10 @@ export class GPUParticleSystem extends Component {
     @property({ type: CCFloat })
     public size = 0.05;
 
-    @property({ type: Vec3 })
+    @property
     public spawnExtent = new Vec3(2, 1, 2);
 
-    @property({ type: Vec3 })
+    @property
     public gravity = new Vec3(0, -9.8, 0);
 
     @property({ type: CCFloat })
@@ -91,8 +92,7 @@ export class GPUParticleSystem extends Component {
     private _syncMaterial (): void {
         const mat = this._renderer?.getMaterialInstance(0);
         if (!mat) return;
-        mat.setProperty('u_time', this._time);
-        
+        mat.setProperty('u_simParams', new Vec4(this._time, Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag)));
         mat.setProperty('u_gravity', new Vec4(this.gravity.x, this.gravity.y, this.gravity.z, 0));
     }
 
