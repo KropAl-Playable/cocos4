@@ -626,10 +626,16 @@ export class Pass {
         const enableEffectImport: boolean = cclegacy.rendering?.enableEffectImport;
         if (enableEffectImport) {
             const r = cclegacy.rendering;
-            if (typeof info.phase === 'number') {
-                this._passID = (info as Pass)._passID;
-                this._subpassID = (info as Pass)._subpassID;
-                this._phaseID = (info as Pass)._phaseID;
+            if (typeof info.phase === 'number' && info instanceof Pass) {
+                // Copying an already initialized Pass preserves its resolved layout IDs.
+                this._passID = info._passID;
+                this._subpassID = info._subpassID;
+                this._phaseID = info._phaseID;
+            } else if (typeof info.phase === 'number') {
+                // Imported EffectAsset passes can contain a numeric layout-graph
+                // phase ID but are plain data, not initialized Pass objects.
+                this._passID = r.getPassID(info.pass);
+                this._phaseID = info.phase;
             } else {
                 this._passID = r.getPassID(info.pass);
                 if (this._passID !== r.INVALID_ID) {
