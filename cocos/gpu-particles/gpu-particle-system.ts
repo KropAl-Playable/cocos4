@@ -3,7 +3,9 @@
  * from immutable spawn data and a single global time uniform.
  * No per-particle CPU update, Node, readback or physics-world contact.
  */
-import { _decorator, CCInteger, CCFloat, Material, Mesh, Vec3, warn } from '../core';
+import { _decorator, CCInteger, CCFloat, Vec3, warn } from '../core';
+import { Material } from '../asset/assets/material';
+import { Mesh } from '../3d/assets/mesh';
 import { Component } from '../scene-graph/component';
 import { MeshRenderer } from '../3d/framework/mesh-renderer';
 import { createMesh } from '../3d/misc/create-mesh';
