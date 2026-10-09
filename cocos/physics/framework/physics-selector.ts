@@ -38,11 +38,14 @@ import { IBoxCharacterController, ICapsuleCharacterController } from '../spec/i-
 import { errorID, IVec3Like, warn, cclegacy, debug } from '../../core';
 import { EColliderType, EConstraintType, ECharacterControllerType } from './physics-enum';
 import { PhysicsMaterial } from '.';
+import type { PhysicsBackendCapabilities } from './physics-capabilities';
+import { DEFAULT_PHYSICS_BACKEND_CAPABILITIES } from './physics-capabilities';
 
 // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 export type IPhysicsEngineId = 'builtin' | 'cannon.js' | 'bullet' | 'physx' | string;
 
 interface IPhysicsWrapperObject {
+    capabilities?: Partial<PhysicsBackendCapabilities>,
     PhysicsWorld?: Constructor<IPhysicsWorld>,
     RigidBody?: Constructor<IRigidBody>,
     BoxCharacterController?: Constructor<IBoxCharacterController>,
@@ -122,6 +125,13 @@ function updateLegacyMacro (id: string): void {
     cclegacy._global.CC_PHYSICS_BUILTIN = id === 'builtin';
     cclegacy._global.CC_PHYSICS_CANNON = id === 'cannon.js';
     cclegacy._global.CC_PHYSICS_AMMO = id === 'bullet';
+}
+
+export function getPhysicsBackendCapabilities (): Readonly<PhysicsBackendCapabilities> {
+    return {
+        ...DEFAULT_PHYSICS_BACKEND_CAPABILITIES,
+        ...(selector.wrapper.capabilities ?? {}),
+    };
 }
 
 function register (id: IPhysicsEngineId, wrapper: IPhysicsWrapperObject): void {

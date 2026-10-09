@@ -56,6 +56,9 @@ export class PhysXRigidBody implements IRigidBody {
     isSleepy = false;
     private _isEnabled = false;
     private _isUsingCCD = false;
+    private _gravityScale = 1;
+    private _maxLinearVelocity = 0;
+    private _maxAngularVelocity = 0;
     private _rigidBody!: RigidBody;
     private _sharedBody!: PhysXSharedBody;
 
@@ -108,8 +111,22 @@ export class PhysXRigidBody implements IRigidBody {
     }
 
     useGravity (v: boolean): void {
+        this.setGravityScale(v ? 1 : 0);
+    }
+
+    setGravityScale (value: number): void {
+        this._gravityScale = value;
         if (this.isStatic) return;
-        this.impl.setActorFlag(PX.ActorFlag.eDISABLE_GRAVITY, !v);
+        this.impl.setActorFlag(PX.ActorFlag.eDISABLE_GRAVITY, value !== 1);
+        if (value !== 0) this.wakeUp();
+    }
+
+    beforeStep (): void {
+        if (!this.isInScene || this.isStaticOrKinematic || this._gravityScale === 0 || this._gravityScale === 1) return;
+        const gravity = PhysicsSystem.instance.gravity;
+        const scaledMass = this._rigidBody.mass * this._gravityScale;
+        v3_0.set(gravity.x * scaledMass, gravity.y * scaledMass, gravity.z * scaledMass);
+        applyForce(true, this.impl, v3_0, Vec3.ZERO);
     }
 
     useCCD (v: boolean): void {
@@ -132,6 +149,21 @@ export class PhysXRigidBody implements IRigidBody {
         this.impl.setRigidDynamicLockFlag(PX.RigidDynamicLockFlag.eLOCK_ANGULAR_X, !v.x);
         this.impl.setRigidDynamicLockFlag(PX.RigidDynamicLockFlag.eLOCK_ANGULAR_Y, !v.y);
         this.impl.setRigidDynamicLockFlag(PX.RigidDynamicLockFlag.eLOCK_ANGULAR_Z, !v.z);
+    }
+
+    setMaxLinearVelocity (value: number): void { this._maxLinearVelocity = Math.max(0, value); }
+    setMaxAngularVelocity (value: number): void { this._maxAngularVelocity = Math.max(0, value); }
+
+    afterStep (): void {
+        if (this.isStaticOrKinematic) return;
+        if (this._maxLinearVelocity > 0) {
+            this.getLinearVelocity(v3_0);
+            if (this._clampVelocity(v3_0, this._maxLinearVelocity)) this.setLinearVelocity(v3_0);
+        }
+        if (this._maxAngularVelocity > 0) {
+            this.getAngularVelocity(v3_0);
+            if (this._clampVelocity(v3_0, this._maxAngularVelocity)) this.setAngularVelocity(v3_0);
+        }
     }
 
     setAllowSleep (v: boolean): void {
@@ -238,6 +270,14 @@ export class PhysXRigidBody implements IRigidBody {
         this._sharedBody.syncSceneToPhysics();
         Vec3.transformQuat(v3_0, torque, this._sharedBody.node.worldRotation);
         applyTorqueForce(this.impl, v3_0);
+    }
+
+    private _clampVelocity (value: Vec3, maximum: number): boolean {
+        const lengthSq = value.lengthSqr();
+        const maxSq = maximum * maximum;
+        if (lengthSq <= maxSq || lengthSq <= 0) return false;
+        Vec3.multiplyScalar(value, value, maximum / Math.sqrt(lengthSq));
+        return true;
     }
 
     setGroup (v: number): void {

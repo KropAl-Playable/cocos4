@@ -27,7 +27,7 @@ import { Root } from '../../root';
 import { TextureBase } from '../../asset/assets/texture-base';
 import { builtinResMgr } from '../../asset/asset-manager/builtin-res-mgr';
 import { getPhaseID } from '../../rendering/pass-phase';
-import { murmurhash2_32_gc, errorID, assertID, cclegacy, warnID } from '../../core';
+import { murmurhash2_32_gc, error, errorID, assertID, cclegacy, warnID } from '../../core';
 import {
     BufferUsageBit, DynamicStateFlagBit, DynamicStateFlags, Feature, GetTypeSize, MemoryUsageBit, PrimitiveMode, Type, Color,
     BlendState, BlendTarget, Buffer, BufferInfo, BufferViewInfo, DepthStencilState, DescriptorSet,
@@ -626,10 +626,27 @@ export class Pass {
         const enableEffectImport: boolean = cclegacy.rendering?.enableEffectImport;
         if (enableEffectImport) {
             const r = cclegacy.rendering;
-            if (typeof info.phase === 'number') {
-                this._passID = (info as Pass)._passID;
-                this._subpassID = (info as Pass)._subpassID;
-                this._phaseID = (info as Pass)._phaseID;
+            if (typeof info.phase === 'number' && info instanceof Pass) {
+                // Copying an already initialized Pass preserves its resolved layout IDs.
+                this._passID = info._passID;
+                this._subpassID = info._subpassID;
+                this._phaseID = info._phaseID;
+            } else if (typeof info.phase === 'number') {
+                // Imported EffectAsset passes are plain data, not initialized Pass objects.
+                // Resolve their numeric phase through the same layout-graph lookup
+                // used by WebProgramLibrary.addEffect(), rather than treating the
+                // numeric value as an absolute vertex descriptor.
+                this._passID = r.getPassID(info.pass);
+                if (this._passID !== r.INVALID_ID) {
+                    if (info.subpass) {
+                        this._subpassID = r.getSubpassID(this._passID, info.subpass);
+                        if (this._subpassID !== r.INVALID_ID) {
+                            this._phaseID = r.getPhaseID(this._subpassID, info.phase);
+                        }
+                    } else {
+                        this._phaseID = r.getPhaseID(this._passID, info.phase);
+                    }
+                }
             } else {
                 this._passID = r.getPassID(info.pass);
                 if (this._passID !== r.INVALID_ID) {
@@ -645,7 +662,8 @@ export class Pass {
                 errorID(12107, info.program);
                 return;
             }
-            if (this._phaseID === r.INVALID_ID) {
+            if (this._phaseID === undefined || this._phaseID === r.INVALID_ID) {
+                error(`[Pass] Invalid render phase: program="${info.program}", pass="${String(info.pass)}", subpass="${String(info.subpass)}", phase="${String(info.phase)}", passID=${String(this._passID)}, subpassID=${String(this._subpassID)}, phaseID=${String(this._phaseID)}`);
                 errorID(12108, info.program);
                 return;
             }
