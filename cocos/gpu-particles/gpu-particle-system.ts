@@ -55,6 +55,7 @@ export class GPUParticleSystem extends Component {
 
     private _mesh: Mesh | null = null;
     private _renderer: MeshRenderer | null = null;
+    private _appliedMaterial: Material | null = null;
     private _time = 0;
 
     protected onLoad (): void {
@@ -70,22 +71,30 @@ export class GPUParticleSystem extends Component {
         if (EDITOR && api !== API.WEBGL2) {
             warn('GPUParticleSystem: Scene Editor is not using WebGL2; mesh will be created, but particles may require a WebGL2 Preview to render.');
         }
-        if (!this.particleMaterial) {
-            warn('GPUParticleSystem requires the Task 005 GPU particle material.');
-            this.enabled = false;
-            return;
-        }
+        // The inspector assigns particleMaterial *after* onLoad when a component
+        // is first added. Build geometry regardless, then bind material lazily.
         this._renderer = this.getComponent(MeshRenderer) || this.addComponent(MeshRenderer);
         this._mesh = this._buildMesh();
         this._renderer.mesh = this._mesh;
-        this._renderer.setMaterial(this.particleMaterial, 0);
-        this._syncMaterial();
+        this._applyMaterial();
     }
 
     protected update (dt: number): void {
         this._time += Math.max(0, dt);
-        const mat = this._renderer?.getMaterialInstance(0);
-        if (mat) mat.setProperty('u_simParams', new Vec4(this._time, Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag)));
+        this._applyMaterial();
+        const mat = this._appliedMaterial ? this._renderer?.getMaterialInstance(0) : null;
+        if (mat) {
+            mat.setProperty('u_simParams', new Vec4(this._time, Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag)));
+        }
+    }
+
+    private _applyMaterial (): void {
+        if (!this._renderer || !this.particleMaterial) return;
+        if (this._appliedMaterial !== this.particleMaterial) {
+            this._renderer.setMaterial(this.particleMaterial, 0);
+            this._appliedMaterial = this.particleMaterial;
+            this._syncMaterial();
+        }
     }
 
     protected onDestroy (): void {
@@ -94,6 +103,7 @@ export class GPUParticleSystem extends Component {
         }
         this._mesh?.destroy();
         this._mesh = null;
+        this._appliedMaterial = null;
     }
 
     private _syncMaterial (): void {
