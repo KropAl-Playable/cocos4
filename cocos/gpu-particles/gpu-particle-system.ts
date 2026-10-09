@@ -129,6 +129,18 @@ export class GPUParticleSystem extends Component {
             const j = i * 4;
             indices.push(j, j + 1, j + 2, j, j + 2, j + 3);
         }
-        return createMesh({ positions, normals, uvs, tangents, indices });
+        // The vertex shader displaces geometry beyond its immutable spawn bounds.
+        // Use a conservative local-space envelope to avoid incorrect frustum culling.
+        const life = Math.max(0.001, this.lifetime);
+        const gravitationalTravel = 0.5 * Vec3.len(this.gravity) * life * life;
+        const travel = Math.abs(this.speed) * life + gravitationalTravel + Math.abs(this.size);
+        const ex = Math.abs(this.spawnExtent.x) * 0.5 + travel;
+        const ey = Math.abs(this.spawnExtent.y) * 0.5 + travel;
+        const ez = Math.abs(this.spawnExtent.z) * 0.5 + travel;
+        return createMesh({
+            positions, normals, uvs, tangents, indices,
+            minPos: new Vec3(-ex, -ey, -ez),
+            maxPos: new Vec3(ex, ey, ez),
+        });
     }
 }
