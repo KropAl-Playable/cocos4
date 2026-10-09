@@ -306,6 +306,14 @@
                 "3d"
             ]
         },
+        "gpu-particles": {
+            "default": false,
+            "label": "GPU Particles (Experimental)",
+            "description": "Separate WebGL2 GPU particle emitter (Task 005 M5.1)",
+            "category": "3d",
+            "enginePlugin": false,
+            "dependencies": ["3d", "gfx-webgl2"]
+        },
         "particle-2d": {
             "default": true,
             "label": "i18n:ENGINE.features.particle_2d.label",
