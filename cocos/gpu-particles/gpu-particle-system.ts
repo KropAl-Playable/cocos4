@@ -3,7 +3,7 @@
  * from immutable spawn data and a single global time uniform.
  * No per-particle CPU update, Node, readback or physics-world contact.
  */
-import { _decorator, CCInteger, CCFloat, Vec3, warn } from '../core';
+import { _decorator, CCInteger, CCFloat, Vec3, Vec4, warn } from '../core';
 import { Material } from '../asset/assets/material';
 import { Mesh } from '../3d/assets/mesh';
 import { Component } from '../scene-graph/component';
@@ -77,7 +77,7 @@ export class GPUParticleSystem extends Component {
     protected update (dt: number): void {
         this._time += Math.max(0, dt);
         const mat = this._renderer?.getMaterialInstance(0);
-        if (mat) mat.setProperty('u_time', this._time);
+        if (mat) mat.setProperty('u_simParams', new Vec4(this._time, Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag)));
     }
 
     protected onDestroy (): void {
@@ -92,8 +92,8 @@ export class GPUParticleSystem extends Component {
         const mat = this._renderer?.getMaterialInstance(0);
         if (!mat) return;
         mat.setProperty('u_time', this._time);
-        mat.setProperty('u_params', [Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag), 0]);
-        mat.setProperty('u_gravity', [this.gravity.x, this.gravity.y, this.gravity.z, 0]);
+        
+        mat.setProperty('u_gravity', new Vec4(this.gravity.x, this.gravity.y, this.gravity.z, 0));
     }
 
     private _buildMesh (): Mesh {
