@@ -27,7 +27,7 @@ import { Root } from '../../root';
 import { TextureBase } from '../../asset/assets/texture-base';
 import { builtinResMgr } from '../../asset/asset-manager/builtin-res-mgr';
 import { getPhaseID } from '../../rendering/pass-phase';
-import { murmurhash2_32_gc, errorID, assertID, cclegacy, warnID } from '../../core';
+import { murmurhash2_32_gc, error, errorID, assertID, cclegacy, warnID } from '../../core';
 import {
     BufferUsageBit, DynamicStateFlagBit, DynamicStateFlags, Feature, GetTypeSize, MemoryUsageBit, PrimitiveMode, Type, Color,
     BlendState, BlendTarget, Buffer, BufferInfo, BufferViewInfo, DepthStencilState, DescriptorSet,
