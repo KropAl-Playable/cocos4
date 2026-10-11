@@ -87,7 +87,11 @@ CCProgram gpu-particle-vs %{
         quadUp = projectedVelocity / projectedSpeed;
         vec3 viewDir = normalize(cc_cameraPos.xyz - world);
         right = normalize(cross(quadUp, viewDir));
-        stretch = 1.0 + min(projectedSpeed * max(0.0, u_stretchParams.y), 10.0);
+        // Clamp the speed (physical input), not speed * factor. The old
+        // 10x output cap made factors 1 and 3 look identical once falling
+        // particles accelerated under gravity.
+        float speedForStretch = min(projectedSpeed, 20.0);
+        stretch = 1.0 + speedForStretch * 0.25 * max(0.0, u_stretchParams.y);
       }
     }
     world += (right * a_texCoord.x + quadUp * a_texCoord.y * stretch) * (0.5 * size);
