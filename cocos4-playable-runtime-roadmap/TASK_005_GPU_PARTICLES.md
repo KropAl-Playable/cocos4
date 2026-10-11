@@ -1,31 +1,32 @@
 # Task 005 — GPU Particles
 
-## M5.1 implementation status (2026-10-09)
+## M5.1 — analytical billboards: visual smoke PASS (2026-10-11)
 
-Experimental analytical WebGL2 spike committed to feat/havok-backend; **not yet validated in Creator**.
+Confirmed by Creator Preview-in-Editor: WebGL2 (gfxAPI=7), 10,000 seeded billboards, one additional draw call, live analytical motion and alpha fade. The key rendering fix was **using the implicit default phase** in the effect; an explicit `phase: default` was imported under a different phase ID and rejected by Custom Pipeline culling.
 
-- Independent GPUParticleSystem component with seeded, fixed-capacity quad mesh.
-- Dedicated WebGL2 shader: billboard, analytical gravity/initial-velocity/drag approximation, cyclic lifetime, alpha fade.
-- Public exports/gpu-particles.ts and opt-in GPU Particles (Experimental) Feature Cropping.
-- No CPU-side per-particle update; CPU advances one uniform per emitter.
+- Renderer uses one generated mesh and one material; no per-particle Node.
+- The engine-wide phase debug instrumentation has been removed.
+- Material and runtime debug log instrumentation has been removed.
+- Depth testing restored after the diagnostic solid-magenta pass.
+- This is a *desktop Preview visual smoke*, **not** Web Mobile / Safari verification or a performance benchmark.
 
-### Creator smoke test
+## M5.2 — rendering extension in progress (2026-10-11)
 
-1. Enable 3D, gfx-webgl2, and GPU Particles (Experimental) in Feature Cropping.
-2. Import/create a Material using advanced/playable-gpu-particles.effect.
-3. Add GPU Particle System (Experimental) to an empty node; assign the material.
-4. Check 1k, 5k, 10k particles in Web Mobile build, after clearing the global engine cache if feature modules changed.
-5. Capture render/compile errors, p50/p95 frame times, draw calls, device GPU, and compressed single-HTML delta.
+Implemented (awaiting Creator test):
+- Optional **velocity-stretched billboard**, with Inspector `stretchedBillboard` (default false) and `stretchFactor` (default 1).
+- GPU computes the view-plane projection of particle velocity, aligning the quad long axis to it and scaling it by projected velocity. When the projected speed is near zero, it falls back to camera up.
+- Material parameters updated via `u_stretchParams` in the shared uniform block.
+- Standard billboards remain the default to preserve the validated M5.1 behavior.
 
-### Explicit known limitations
+Not implemented / pending: mesh-particle rendering, analytic plane/sphere/box collisions, Web Mobile validation, performance benchmark, inspector-driven geometry rebuild, and WebGL1 fallback.
 
-- Shader compilation and runtime behavior have not been tested in Cocos Creator yet.
-- Shader displacement exceeds static mesh bounds; conservative bounds/culling solution pending.
-- Billboard only; stretched and mesh particles plus analytical plane/sphere/box collisions are M5.2.
-- No Transform Feedback or mutable simulation state yet; this is an analytical GPU rendering spike.
-- Changes to serialized settings after startup require rebuilding mesh/material.
-- Drag only damps initial velocity; gravity is ballistic, not drag-integrated.
-- WebGL1 unsupported: component disables itself.
+### Next Creator test
+
+1. Pull changes and allow reimport of `advanced/playable-gpu-particles.effect`.
+2. Verify default `stretchedBillboard=false` still renders ordinary particles in Preview.
+3. Enable `stretchedBillboard`; compare `stretchFactor=0`, `1`, and `3` with nonzero speed.
+4. Check shader compilation and that draw calls stay near one per emitter.
+5. Do not mark M5.2 complete until stretched mode and mobile performance have been verified.
 
 ---
 
