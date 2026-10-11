@@ -56,6 +56,15 @@ export class GPUParticleSystem extends Component {
     @property({ type: CCFloat })
     public stretchFactor = 1;
 
+    @property
+    public collideWithPlane = false;
+
+    @property({ type: CCFloat })
+    public collisionPlaneHeight = 0;
+
+    @property({ type: CCFloat })
+    public planeRestitution = 0.5;
+
     @property({ type: Material })
     public particleMaterial: Material | null = null;
 
@@ -92,6 +101,7 @@ export class GPUParticleSystem extends Component {
         if (mat) {
             mat.setProperty('u_simParams', new Vec4(this._time, Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag)));
             mat.setProperty('u_stretchParams', new Vec4(this.stretchedBillboard ? 1 : 0, Math.max(0, this.stretchFactor), 0, 0));
+            mat.setProperty('u_collisionPlane', new Vec4(this.collideWithPlane ? 1 : 0, this.collisionPlaneHeight, Math.max(0, Math.min(1, this.planeRestitution)), 0));
         }
     }
 
@@ -119,6 +129,7 @@ export class GPUParticleSystem extends Component {
         mat.setProperty('u_simParams', new Vec4(this._time, Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag)));
         mat.setProperty('u_gravity', new Vec4(this.gravity.x, this.gravity.y, this.gravity.z, 0));
         mat.setProperty('u_stretchParams', new Vec4(this.stretchedBillboard ? 1 : 0, Math.max(0, this.stretchFactor), 0, 0));
+        mat.setProperty('u_collisionPlane', new Vec4(this.collideWithPlane ? 1 : 0, this.collisionPlaneHeight, Math.max(0, Math.min(1, this.planeRestitution)), 0));
     }
 
     private _buildMesh (): Mesh {
