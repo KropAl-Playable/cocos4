@@ -73,7 +73,7 @@ CCProgram gpu-particle-vs %{
 }%
 
 CCProgram gpu-particle-fs %{
-  precision mediump float;
+  precision highp float;
   #include <legacy/output>
   uniform ParticleData {
     vec4 u_simParams;
