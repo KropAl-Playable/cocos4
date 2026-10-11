@@ -28,6 +28,7 @@ class CullingPools {
 const REFLECTION_PROBE_DEFAULT_MASK = Layers.makeMaskExclude([Layers.BitMask.UI_2D, Layers.BitMask.UI_3D,
     Layers.BitMask.GIZMOS, Layers.BitMask.EDITOR,
     Layers.BitMask.SCENE_GIZMO, Layers.BitMask.PROFILER]);
+const _gpuParticlePhaseTrace = new Set<string>();
 const objIdMap: WeakMap<object, number> = new WeakMap();
 let cullingKeys: string = '';
 let objectCount: number = 0;
@@ -252,6 +253,25 @@ function addRenderObject (
             const pass = passes[passIdx];
             // check phase
             const phaseAllowed = phaseLayoutId === pass.phaseID;
+            // Task 005: targeted diagnostics for GPU particle draw submission.
+            // Limit to one trace per distinct camera/queue/phase combination.
+            if (model.node?.name.includes('GPU_Particles')) {
+                const key = `${camera.name}:${phaseLayoutId}:${pass.phaseID}:${isDrawOpaqueOrMask}:${isDrawBlend}`;
+                if (!_gpuParticlePhaseTrace.has(key)) {
+                    _gpuParticlePhaseTrace.add(key);
+                    console.info('[GPUParticleSystem] culling phase', {
+                        camera: camera.name,
+                        queuePhaseID: phaseLayoutId,
+                        materialPhaseID: pass.phaseID,
+                        phaseAllowed,
+                        blend: pass.blendState.targets[0].blend,
+                        queueAllowsBlend: isDrawBlend,
+                        queueAllowsOpaque: isDrawOpaqueOrMask,
+                        visibility: camera.visibility,
+                        modelVisibility: model.visFlags,
+                    });
+                }
+            }
             if (!phaseAllowed) {
                 continue;
             }
