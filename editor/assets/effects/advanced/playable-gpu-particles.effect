@@ -11,7 +11,7 @@ CCEffect %{
       rasterizerState:
         cullMode: none
       depthStencilState:
-        depthTest: true
+        depthTest: false
         depthWrite: false
       blendState:
         targets:
@@ -24,6 +24,7 @@ CCEffect %{
         u_simParams: { value: [0, 3, 0.05, 0], editor: { visible: false } }
         u_gravity: { value: [0, -9.8, 0, 0], editor: { visible: false } }
         mainColor: { value: [1, 0.8, 0.3, 1], editor: { type: color } }
+        u_debugParams: { value: [1, 0, 0, 0] }
 }%
 
 CCProgram gpu-particle-vs %{
@@ -36,6 +37,7 @@ CCProgram gpu-particle-vs %{
     vec4 u_simParams;  // time, lifetime, size, drag
     vec4 u_gravity;
     vec4 mainColor;
+    vec4 u_debugParams;
   };
 
   out vec2 v_uv;
@@ -55,11 +57,12 @@ CCProgram gpu-particle-vs %{
     // Gravity integrated analytically; linear drag applies to initial velocity.
     vec3 position = In.position.xyz + In.normal.xyz * velFactor
         + 0.5 * u_gravity.xyz * t * t;
+    if (u_debugParams.x > 0.5) position = In.position.xyz;
     vec3 world = (matWorld * vec4(position, 1.0)).xyz;
     // View matrix rows represent camera right and up in world space.
     vec3 right = vec3(cc_matView[0][0], cc_matView[1][0], cc_matView[2][0]);
     vec3 up = vec3(cc_matView[0][1], cc_matView[1][1], cc_matView[2][1]);
-    float size = u_simParams.z;
+    float size = u_debugParams.x > 0.5 ? 0.5 : u_simParams.z;
     world += (right * a_texCoord.x + up * a_texCoord.y) * (0.5 * size);
     v_uv = a_texCoord * 0.5 + 0.5;
     float normalizedAge = age / life;
@@ -76,6 +79,7 @@ CCProgram gpu-particle-fs %{
     vec4 u_simParams;
     vec4 u_gravity;
     vec4 mainColor;
+    vec4 u_debugParams;
   };
   in vec2 v_uv;
   in float v_alpha;
@@ -83,6 +87,7 @@ CCProgram gpu-particle-fs %{
   vec4 frag () {
     vec2 p = v_uv * 2.0 - 1.0;
     float radial = clamp(1.0 - dot(p, p), 0.0, 1.0);
+    if (u_debugParams.x > 0.5) return CCFragOutput(vec4(1.0, 0.0, 1.0, 1.0));
     return CCFragOutput(vec4(mainColor.rgb, mainColor.a * radial * v_alpha));
   }
 }%
