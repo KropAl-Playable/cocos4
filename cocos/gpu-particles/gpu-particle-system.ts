@@ -62,7 +62,7 @@ export class GPUParticleSystem extends Component {
         // Editor's Scene view may use a different backend than Web Preview.
         // Build the mesh for inspection in editor even when its graphics backend
         // is not WebGL2; enforce WebGL2 strictly in runtime.
-        const api = deviceManager.gfxDevice?.api;
+        const api = deviceManager.gfxDevice?.gfxAPI;
         if (!EDITOR && api !== API.WEBGL2) {
             warn('GPUParticleSystem requires WebGL2 at runtime; emitter disabled.');
             this.enabled = false;
@@ -77,7 +77,7 @@ export class GPUParticleSystem extends Component {
         this._mesh = this._buildMesh();
         this._renderer.mesh = this._mesh;
         console.info('[GPUParticleSystem] mesh created', {
-            api: deviceManager.gfxDevice?.api,
+            api: deviceManager.gfxDevice?.gfxAPI,
             count: Math.max(1, Math.min(20000, Math.floor(this.capacity))),
             vertices: this._mesh.struct.vertexBundles[0]?.view.count,
             indices: this._mesh.struct.primitives[0]?.indexView?.count,
