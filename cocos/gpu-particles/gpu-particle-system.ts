@@ -50,6 +50,12 @@ export class GPUParticleSystem extends Component {
     @property({ type: CCFloat })
     public drag = 0;
 
+    @property
+    public stretchedBillboard = false;
+
+    @property({ type: CCFloat })
+    public stretchFactor = 1;
+
     @property({ type: Material })
     public particleMaterial: Material | null = null;
 
@@ -57,7 +63,6 @@ export class GPUParticleSystem extends Component {
     private _renderer: MeshRenderer | null = null;
     private _appliedMaterial: Material | null = null;
     private _time = 0;
-    private _renderDiagnosticsLogged = false;
 
     protected onLoad (): void {
         // Editor's Scene view may use a different backend than Web Preview.
@@ -77,41 +82,16 @@ export class GPUParticleSystem extends Component {
         this._renderer = this.getComponent(MeshRenderer) || this.addComponent(MeshRenderer);
         this._mesh = this._buildMesh();
         this._renderer.mesh = this._mesh;
-        console.info('[GPUParticleSystem] mesh created', {
-            api: deviceManager.gfxDevice?.gfxAPI,
-            count: Math.max(1, Math.min(20000, Math.floor(this.capacity))),
-            vertices: this._mesh.struct.vertexBundles[0]?.view.count,
-            indices: this._mesh.struct.primitives[0]?.indexView?.count,
-            meshAssigned: this._renderer.mesh === this._mesh,
-            materialAssigned: !!this.particleMaterial,
-        });
         this._applyMaterial();
     }
 
     protected update (dt: number): void {
         this._time += Math.max(0, dt);
         this._applyMaterial();
-        if (!this._renderDiagnosticsLogged && this._renderer && this._appliedMaterial) {
-            this._renderDiagnosticsLogged = true;
-            const model = this._renderer.model;
-            const renderMaterial = this._renderer.getRenderMaterial(0);
-            console.info('[GPUParticleSystem] render state', {
-                rendererEnabled: this._renderer.enabledInHierarchy,
-                meshAssigned: this._renderer.mesh === this._mesh,
-                meshSubmeshes: this._mesh?.renderingSubMeshes.length,
-                modelExists: !!model,
-                modelInitialized: model?.inited,
-                modelEnabled: model?.enabled,
-                modelAttached: !!model?.scene,
-                submodels: model?.subModels.length,
-                renderMaterial: renderMaterial?.name,
-                renderPasses: renderMaterial?.passes.length,
-                passPhaseIDs: renderMaterial?.passes.map((pass) => pass.phaseID),
-            });
-        }
         const mat = this._appliedMaterial ? this._renderer?.getMaterialInstance(0) : null;
         if (mat) {
             mat.setProperty('u_simParams', new Vec4(this._time, Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag)));
+            mat.setProperty('u_stretchParams', new Vec4(this.stretchedBillboard ? 1 : 0, Math.max(0, this.stretchFactor), 0, 0));
         }
     }
 
@@ -138,6 +118,7 @@ export class GPUParticleSystem extends Component {
         if (!mat) return;
         mat.setProperty('u_simParams', new Vec4(this._time, Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag)));
         mat.setProperty('u_gravity', new Vec4(this.gravity.x, this.gravity.y, this.gravity.z, 0));
+        mat.setProperty('u_stretchParams', new Vec4(this.stretchedBillboard ? 1 : 0, Math.max(0, this.stretchFactor), 0, 0));
     }
 
     private _buildMesh (): Mesh {
