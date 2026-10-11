@@ -25,6 +25,22 @@ CCEffect %{
         u_gravity: { value: [0, -9.8, 0, 0], editor: { visible: false } }
         mainColor: { value: [1, 0.8, 0.3, 1], editor: { type: color } }
         u_debugParams: { value: [1, 0, 0, 0] }
+    - vert: gpu-particle-vs:vert
+      frag: gpu-particle-fs:frag
+      phase: deferred-forward
+      propertyIndex: 0
+      rasterizerState:
+        cullMode: none
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: one
+          blendDstAlpha: one_minus_src_alpha
 }%
 
 CCProgram gpu-particle-vs %{
