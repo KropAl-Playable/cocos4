@@ -24,6 +24,7 @@ CCEffect %{
         u_gravity: { value: [0, -9.8, 0, 0], editor: { visible: false } }
         mainColor: { value: [1, 0.8, 0.3, 1], editor: { type: color } }
         u_stretchParams: { value: [0, 1, 0, 0], editor: { visible: false } }
+        u_collisionPlane: { value: [0, 0, 0.5, 0], editor: { visible: false } }
     - vert: gpu-particle-vs:vert
       frag: gpu-particle-fs:frag
       phase: deferred-forward
@@ -53,6 +54,7 @@ CCProgram gpu-particle-vs %{
     vec4 u_gravity;
     vec4 mainColor;
     vec4 u_stretchParams;
+    vec4 u_collisionPlane;
   };
 
   out vec2 v_uv;
@@ -73,6 +75,47 @@ CCProgram gpu-particle-vs %{
     vec3 position = In.position.xyz + In.normal.xyz * velFactor
         + 0.5 * u_gravity.xyz * t * t;
     vec3 world = (matWorld * vec4(position, 1.0)).xyz;
+    vec3 velocityWorld = mat3(matWorld) * (In.normal.xyz + u_gravity.xyz * t);
+    // Optional single-bounce analytic collision with world-space horizontal plane.
+    // This uses a ballistic trajectory (drag is intentionally ignored for
+    // collision timing) and resolves only the first downward impact per cycle.
+    if (u_collisionPlane.x > 0.5) {
+      vec3 startWorld = (matWorld * vec4(In.position.xyz, 1.0)).xyz;
+      vec3 initialVelocity = mat3(matWorld) * In.normal.xyz;
+      vec3 gravityWorld = mat3(matWorld) * u_gravity.xyz;
+      float height = u_collisionPlane.y;
+      float g = gravityWorld.y;
+      float vy = initialVelocity.y;
+      float d = startWorld.y - height;
+      float impactTime = -1.0;
+      if (d >= 0.0) {
+        if (abs(g) < 0.00001) {
+          if (vy < -0.00001) impactTime = -d / vy;
+        } else {
+          float discriminant = vy * vy - 2.0 * g * d;
+          if (discriminant >= 0.0) {
+            float root = (-vy - sqrt(discriminant)) / g;
+            float root2 = (-vy + sqrt(discriminant)) / g;
+            if (root >= 0.0 && vy + g * root < 0.0) impactTime = root;
+            if (root2 >= 0.0 && vy + g * root2 < 0.0
+                && (impactTime < 0.0 || root2 < impactTime)) impactTime = root2;
+          }
+        }
+      }
+      if (impactTime >= 0.0 && t >= impactTime) {
+        float remaining = t - impactTime;
+        vec3 impact = startWorld + initialVelocity * impactTime
+            + 0.5 * gravityWorld * impactTime * impactTime;
+        impact.y = height;
+        vec3 reboundVelocity = initialVelocity + gravityWorld * impactTime;
+        reboundVelocity.y = -reboundVelocity.y * clamp(u_collisionPlane.z, 0.0, 1.0);
+        world = impact + reboundVelocity * remaining
+            + 0.5 * gravityWorld * remaining * remaining;
+        world.y = max(height, world.y);
+        velocityWorld = reboundVelocity + gravityWorld * remaining;
+        if (world.y <= height + 0.0001 && velocityWorld.y < 0.0) velocityWorld.y = 0.0;
+      }
+    }
     // View matrix rows represent camera right and up in world space.
     vec3 right = vec3(cc_matView[0][0], cc_matView[1][0], cc_matView[2][0]);
     vec3 up = vec3(cc_matView[0][1], cc_matView[1][1], cc_matView[2][1]);
@@ -80,7 +123,6 @@ CCProgram gpu-particle-vs %{
     vec3 quadUp = up;
     float stretch = 1.0;
     if (u_stretchParams.x > 0.5) {
-      vec3 velocityWorld = mat3(matWorld) * (In.normal.xyz + u_gravity.xyz * t);
       vec3 projectedVelocity = velocityWorld - dot(velocityWorld, normalize(cc_cameraPos.xyz - world)) * normalize(cc_cameraPos.xyz - world);
       float projectedSpeed = length(projectedVelocity);
       if (projectedSpeed > 0.0001) {
@@ -111,6 +153,7 @@ CCProgram gpu-particle-fs %{
     vec4 u_gravity;
     vec4 mainColor;
     vec4 u_stretchParams;
+    vec4 u_collisionPlane;
   };
   in vec2 v_uv;
   in float v_alpha;
