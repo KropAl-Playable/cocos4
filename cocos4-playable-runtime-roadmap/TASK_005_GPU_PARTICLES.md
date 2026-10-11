@@ -18,7 +18,25 @@ Implemented (awaiting Creator test):
 - Material parameters updated via `u_stretchParams` in the shared uniform block.
 - Standard billboards remain the default to preserve the validated M5.1 behavior.
 
-Not implemented / pending: mesh-particle rendering, analytic plane/sphere/box collisions, Web Mobile validation, performance benchmark, inspector-driven geometry rebuild, and WebGL1 fallback.
+Validated by user in Creator Preview: velocity-stretched billboards and stretchFactor modulation (2026-10-11).
+
+Implemented, awaiting Creator smoke test:
+- Optional first-contact analytic collision with world-space horizontal plane. Inspector fields: `collideWithPlane`, `collisionPlaneHeight` (world Y), `planeRestitution` (0–1).
+- Ballistic quadratic impact calculation in vertex shader; single bounce each particle life cycle. Once the subsequent ballistic path reaches the plane, position is clamped to the plane. This is **not** a multi-bounce solver.
+- No per-particle CPU update; disabled by default to preserve the visually validated M5.1/M5.2 behavior.
+- Collision calculation assumes ballistic motion; with `drag > 0`, collision timing differs from the displayed drag-integrated trajectory. Use `drag = 0` for this spike's collision test.
+
+Not implemented / pending: mesh-particle rendering, analytic sphere/box collisions, multiple rebounds, Web Mobile validation, performance benchmark, inspector-driven geometry rebuild, and WebGL1 fallback.
+
+### Plane collision smoke test
+
+1. Use a fresh GPU particle material imported from the latest effect.
+2. Spawn above the ground plane with `spawnExtent=(1,0,1)`, emitter node at world `Y=2`, `speed=0`, `gravity=(0,-9.8,0)`, `lifetime=3`, `drag=0`.
+3. Enable `collideWithPlane`, set `collisionPlaneHeight=0`, `planeRestitution=0.6`.
+4. In Preview, confirm particles hit the Y=0 plane and rebound once; disable collision and confirm they fall through.
+5. Compare restitution `0` versus `1`. Confirm ordinary and stretched billboard paths still render.
+6. Verify no new shader compile/link errors and that the emitter still adds approximately one draw call.
+
 
 ### Next Creator test
 
