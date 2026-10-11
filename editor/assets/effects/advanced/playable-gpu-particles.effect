@@ -7,7 +7,6 @@ CCEffect %{
     passes:
     - vert: gpu-particle-vs:vert
       frag: gpu-particle-fs:frag
-      phase: default
       rasterizerState:
         cullMode: none
       depthStencilState:
