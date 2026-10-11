@@ -46,6 +46,20 @@ export interface IRigidBody extends ILifecycle, IGroupMask {
     setAngularFactor: (v: IVec3Like) => void;
     setAllowSleep: (v: boolean) => void;
 
+    /**
+     * Optional extended body controls. Backends that do not implement a control
+     * still expose the high-level RigidBody property; the framework falls back
+     * to the closest legacy behavior where possible.
+     */
+    setCenterOfMass?: (v: IVec3Like) => void;
+    setAutomaticCenterOfMass?: (v: boolean) => void;
+    setGravityScale?: (v: number) => void;
+    setAutomaticInertiaTensor?: (v: boolean) => void;
+    setInertiaTensor?: (v: IVec3Like) => void;
+    setInertiaTensorRotation?: (x: number, y: number, z: number, w: number) => void;
+    setMaxLinearVelocity?: (v: number) => void;
+    setMaxAngularVelocity?: (v: number) => void;
+
     wakeUp (): void;
     sleep (): void;
     clearState (): void;

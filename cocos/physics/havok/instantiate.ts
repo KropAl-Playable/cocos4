@@ -1,0 +1,62 @@
+/*
+ Copyright (c) 2026 KropAl-Playable
+ SPDX-License-Identifier: MIT
+ */
+
+import { BUILD, LOAD_HAVOK_MANUALLY } from 'internal:constants';
+import { Game, game } from '../../game';
+import { PhysicsSystem } from '../framework/physics-system';
+import { selector } from '../framework/physics-selector';
+import {
+    HavokConfigurableConstraint,
+    HavokFixedConstraint,
+    HavokHingeConstraint,
+    HavokPointToPointConstraint,
+} from './constraints/havok-constraint';
+import { HavokWorld } from './havok-world';
+import { HavokRigidBody } from './havok-rigid-body';
+import {
+    HavokBoxShape,
+    HavokCapsuleShape,
+    HavokCylinderShape,
+    HavokSphereShape,
+    HavokTrimeshShape,
+} from './shapes/havok-shape';
+import { waitForHavokInstantiation } from './instantiated';
+
+game.once(Game.EVENT_PRE_SUBSYSTEM_INIT, () => {
+    selector.register('havok', {
+        capabilities: {
+            centerOfMass: true,
+            gravityScale: true,
+            axisLocks: false,
+            ccd: false,
+            restitution: true,
+            materialCombineModes: true,
+            customInertia: true,
+            velocityLimits: true,
+        },
+        PhysicsWorld: HavokWorld,
+        RigidBody: HavokRigidBody,
+        BoxShape: HavokBoxShape,
+        SphereShape: HavokSphereShape,
+        CapsuleShape: HavokCapsuleShape,
+        CylinderShape: HavokCylinderShape,
+        TrimeshShape: HavokTrimeshShape,
+        PointToPointConstraint: HavokPointToPointConstraint,
+        HingeConstraint: HavokHingeConstraint,
+        FixedConstraint: HavokFixedConstraint,
+        ConfigurableConstraint: HavokConfigurableConstraint,
+    });
+});
+
+let loadHavokPromise: Promise<void> | undefined;
+
+export function loadWasmModuleHavok (): Promise<void> {
+    if (loadHavokPromise) return loadHavokPromise;
+    loadHavokPromise = waitForHavokInstantiation();
+    if (BUILD && LOAD_HAVOK_MANUALLY) {
+        loadHavokPromise = loadHavokPromise.then(() => PhysicsSystem.constructAndRegisterManually());
+    }
+    return loadHavokPromise;
+}

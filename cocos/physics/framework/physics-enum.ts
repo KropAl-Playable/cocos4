@@ -57,6 +57,23 @@ Enum(ERigidBodyType);
 
 /**
  * @en
+ * Controls how two physics material coefficients are combined at contact.
+ * Backends may expose only a subset; use backend capabilities when exact
+ * behavior matters.
+ * @zh
+ * 控制接触时两个物理材质系数的组合方式。
+ */
+export enum EPhysicsMaterialCombine {
+    GEOMETRIC_MEAN = 0,
+    MINIMUM = 1,
+    MAXIMUM = 2,
+    AVERAGE = 3,
+    MULTIPLY = 4,
+}
+Enum(EPhysicsMaterialCombine);
+
+/**
+ * @en
  * Axis Direction.
  * @zh
  * 轴方向。

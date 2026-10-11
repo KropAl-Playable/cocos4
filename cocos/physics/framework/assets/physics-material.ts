@@ -27,6 +27,7 @@
 import { ccclass, editable, range, serializable, type } from 'cc.decorator';
 import { Asset } from '../../../asset/assets/asset';
 import { CCFloat, math } from '../../../core';
+import { EPhysicsMaterialCombine } from '../physics-enum';
 
 /**
  * @en
@@ -111,6 +112,23 @@ export class PhysicsMaterial extends Asset {
     }
 
     /**
+     * @en How friction values from two contacting materials are combined.
+     * @zh 两个接触材质的摩擦系数如何组合。
+     */
+    @editable
+    @type(EPhysicsMaterialCombine)
+    get frictionCombine (): EPhysicsMaterialCombine {
+        return this._frictionCombine;
+    }
+
+    set frictionCombine (value: EPhysicsMaterialCombine) {
+        if (this._frictionCombine !== value) {
+            this._frictionCombine = value;
+            this.emit(PhysicsMaterial.EVENT_UPDATE);
+        }
+    }
+
+    /**
      * @en
      * Restitution for this material.
      * @zh
@@ -130,6 +148,35 @@ export class PhysicsMaterial extends Asset {
         }
     }
 
+    /**
+     * @en Authoring-friendly alias for restitution.
+     * @zh restitution 的易用别名。
+     */
+    get bounciness (): number {
+        return this.restitution;
+    }
+
+    set bounciness (value: number) {
+        this.restitution = value;
+    }
+
+    /**
+     * @en How restitution values from two contacting materials are combined.
+     * @zh 两个接触材质的回弹系数如何组合。
+     */
+    @editable
+    @type(EPhysicsMaterialCombine)
+    get restitutionCombine (): EPhysicsMaterialCombine {
+        return this._restitutionCombine;
+    }
+
+    set restitutionCombine (value: EPhysicsMaterialCombine) {
+        if (this._restitutionCombine !== value) {
+            this._restitutionCombine = value;
+            this.emit(PhysicsMaterial.EVENT_UPDATE);
+        }
+    }
+
     readonly id: number;
     private static _idCounter = 0;
 
@@ -144,6 +191,12 @@ export class PhysicsMaterial extends Asset {
 
     @serializable
     private _restitution = 0.0;
+
+    @serializable
+    private _frictionCombine = EPhysicsMaterialCombine.GEOMETRIC_MEAN;
+
+    @serializable
+    private _restitutionCombine = EPhysicsMaterialCombine.AVERAGE;
 
     constructor () {
         super();
@@ -164,6 +217,8 @@ export class PhysicsMaterial extends Asset {
         c._restitution = this._restitution;
         c._rollingFriction = this._rollingFriction;
         c._spinningFriction = this._spinningFriction;
+        c._frictionCombine = this._frictionCombine;
+        c._restitutionCombine = this._restitutionCombine;
         return c;
     }
 

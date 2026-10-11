@@ -102,6 +102,11 @@
                 "78e0584a-4343-4727-8f37-e14e65c2a2db"
             ]
         },
+        "gpu-particles": {
+            "modules": ["gpu-particles"],
+            "dependentModules": ["3d", "gfx-webgl2"],
+            "dependentAssets": ["08c19a69-518e-4c4c-8f2d-53f30b0e3f15"]
+        },
         "particle-2d": {
             "modules": ["particle-2d"],
             "dependentModules": ["2d"]
@@ -119,6 +124,10 @@
         },
         "physics-ammo": {
             "modules": ["physics-ammo", "physics-framework"],
+            "dependentAssets": ["ba21476f-2866-4f81-9c4d-6e359316e448"]
+        },
+        "physics-havok": {
+            "modules": ["physics-havok", "physics-framework"],
             "dependentAssets": ["ba21476f-2866-4f81-9c4d-6e359316e448"]
         },
         "physics-builtin": {
@@ -234,13 +243,14 @@
             "dependentModules": ["2d"]
         },
         "marionette": {
-            "modules": [],
+            "modules": ["animation", "marionette"],
             "intrinsicFlags": {
                 "MARIONETTE": true
             }
         },
         "procedural-animation": {
             "modules": [],
+            "dependentModules": ["animation"],
             "intrinsicFlags": {
                 "PROCEDURAL_ANIMATION": true
             }
@@ -828,6 +838,12 @@
         },
         "LOAD_PHYSX_MANUALLY": {
             "comment": "An internal constant to indicate whether we need to load physx wasm/asmjs module manually.",
+            "type": "boolean",
+            "value": false,
+            "internal": true
+        },
+        "LOAD_HAVOK_MANUALLY": {
+            "comment": "An internal constant to indicate whether we need to load Havok wasm module manually.",
             "type": "boolean",
             "value": false,
             "internal": true

@@ -98,8 +98,30 @@ export class CannonRigidBody implements IRigidBody {
     }
 
     useGravity (value: boolean): void {
-        this.impl.useGravity = value;
+        this.setGravityScale(value ? 1 : 0);
+    }
+
+    setGravityScale (value: number): void {
+        this._gravityScale = value;
+        this.impl.useGravity = value === 1;
         this._wakeUpIfSleep();
+    }
+
+    beforeStep (): void {
+        if (this.impl.type !== CANNON.Body.DYNAMIC || this._gravityScale === 0 || this._gravityScale === 1) return;
+        const gravity = PhysicsSystem.instance.gravity;
+        const scaledMass = this.impl.mass * this._gravityScale;
+        this.impl.force.x += gravity.x * scaledMass;
+        this.impl.force.y += gravity.y * scaledMass;
+        this.impl.force.z += gravity.z * scaledMass;
+    }
+
+    setMaxLinearVelocity (value: number): void { this._maxLinearVelocity = Math.max(0, value); }
+    setMaxAngularVelocity (value: number): void { this._maxAngularVelocity = Math.max(0, value); }
+
+    afterStep (): void {
+        this._clampVelocity(this.impl.velocity, this._maxLinearVelocity);
+        this._clampVelocity(this.impl.angularVelocity, this._maxAngularVelocity);
     }
 
     useCCD (value: boolean): void {
@@ -145,6 +167,9 @@ export class CannonRigidBody implements IRigidBody {
     private _sharedBody!: CannonSharedBody;
 
     private _isEnabled = false;
+    private _gravityScale = 1;
+    private _maxLinearVelocity = 0;
+    private _maxAngularVelocity = 0;
 
     /** LIFECYCLE */
 
@@ -316,6 +341,15 @@ export class CannonRigidBody implements IRigidBody {
     removeMask (v: number): void {
         this.impl.collisionFilterMask &= ~v;
         this._wakeUpIfSleep();
+    }
+
+    private _clampVelocity (value: CANNON.Vec3, maximum: number): void {
+        if (maximum <= 0) return;
+        const lengthSq = value.x * value.x + value.y * value.y + value.z * value.z;
+        const maxSq = maximum * maximum;
+        if (lengthSq <= maxSq || lengthSq <= 0) return;
+        const scale = maximum / Math.sqrt(lengthSq);
+        value.x *= scale; value.y *= scale; value.z *= scale;
     }
 
     protected _wakeUpIfSleep (): void {
