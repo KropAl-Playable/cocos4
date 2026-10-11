@@ -57,6 +57,7 @@ export class GPUParticleSystem extends Component {
     private _renderer: MeshRenderer | null = null;
     private _appliedMaterial: Material | null = null;
     private _time = 0;
+    private _renderDiagnosticsLogged = false;
 
     protected onLoad (): void {
         // Editor's Scene view may use a different backend than Web Preview.
@@ -90,6 +91,24 @@ export class GPUParticleSystem extends Component {
     protected update (dt: number): void {
         this._time += Math.max(0, dt);
         this._applyMaterial();
+        if (!this._renderDiagnosticsLogged && this._renderer && this._appliedMaterial) {
+            this._renderDiagnosticsLogged = true;
+            const model = this._renderer.model;
+            const renderMaterial = this._renderer.getRenderMaterial(0);
+            console.info('[GPUParticleSystem] render state', {
+                rendererEnabled: this._renderer.enabledInHierarchy,
+                meshAssigned: this._renderer.mesh === this._mesh,
+                meshSubmeshes: this._mesh?.renderingSubMeshes.length,
+                modelExists: !!model,
+                modelInitialized: model?.inited,
+                modelEnabled: model?.enabled,
+                modelAttached: !!model?.scene,
+                submodels: model?.subModels.length,
+                renderMaterial: renderMaterial?.name,
+                renderPasses: renderMaterial?.passes.length,
+                passPhaseIDs: renderMaterial?.passes.map((pass) => pass.phaseID),
+            });
+        }
         const mat = this._appliedMaterial ? this._renderer?.getMaterialInstance(0) : null;
         if (mat) {
             mat.setProperty('u_simParams', new Vec4(this._time, Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag)));
