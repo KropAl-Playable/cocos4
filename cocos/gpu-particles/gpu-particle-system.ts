@@ -65,6 +65,18 @@ export class GPUParticleSystem extends Component {
     @property({ type: CCFloat })
     public planeRestitution = 0.5;
 
+    @property
+    public collideWithSphere = false;
+
+    @property
+    public sphereCenter = new Vec3(0, 0, 0);
+
+    @property({ type: CCFloat })
+    public sphereRadius = 1;
+
+    @property({ type: CCFloat })
+    public sphereRestitution = 0.5;
+
     @property({ type: Material })
     public particleMaterial: Material | null = null;
 
@@ -102,6 +114,8 @@ export class GPUParticleSystem extends Component {
             mat.setProperty('u_simParams', new Vec4(this._time, Math.max(0.001, this.lifetime), Math.max(0.001, this.size), Math.max(0, this.drag)));
             mat.setProperty('u_stretchParams', new Vec4(this.stretchedBillboard ? 1 : 0, Math.max(0, this.stretchFactor), 0, 0));
             mat.setProperty('u_collisionPlane', new Vec4(this.collideWithPlane ? 1 : 0, this.collisionPlaneHeight, Math.max(0, Math.min(1, this.planeRestitution)), 0));
+        mat.setProperty('u_collisionSphere', new Vec4(this.sphereCenter.x, this.sphereCenter.y, this.sphereCenter.z, 0));
+        mat.setProperty('u_sphereParams', new Vec4(this.collideWithSphere ? 1 : 0, Math.max(0.0001, this.sphereRadius), Math.max(0, Math.min(1, this.sphereRestitution)), 0));
         }
     }
 
@@ -130,6 +144,8 @@ export class GPUParticleSystem extends Component {
         mat.setProperty('u_gravity', new Vec4(this.gravity.x, this.gravity.y, this.gravity.z, 0));
         mat.setProperty('u_stretchParams', new Vec4(this.stretchedBillboard ? 1 : 0, Math.max(0, this.stretchFactor), 0, 0));
         mat.setProperty('u_collisionPlane', new Vec4(this.collideWithPlane ? 1 : 0, this.collisionPlaneHeight, Math.max(0, Math.min(1, this.planeRestitution)), 0));
+        mat.setProperty('u_collisionSphere', new Vec4(this.sphereCenter.x, this.sphereCenter.y, this.sphereCenter.z, 0));
+        mat.setProperty('u_sphereParams', new Vec4(this.collideWithSphere ? 1 : 0, Math.max(0.0001, this.sphereRadius), Math.max(0, Math.min(1, this.sphereRestitution)), 0));
     }
 
     private _buildMesh (): Mesh {
