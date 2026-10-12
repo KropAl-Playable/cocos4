@@ -10,6 +10,27 @@ Confirmed by Creator Preview-in-Editor: WebGL2 (gfxAPI=7), 10,000 seeded billboa
 - Depth testing restored after the diagnostic solid-magenta pass.
 - This is a *desktop Preview visual smoke*, **not** Web Mobile / Safari verification or a performance benchmark.
 
+## M5.2 — Sphere Collision implementation (2026-10-12)
+
+Plane collision confirmed working by user. Sphere collision implemented, **not yet compiled/tested in Creator**.
+
+- Inspector: `collideWithSphere` (default false), `sphereCenter` (world coordinates), `sphereRadius`, `sphereRestitution`.
+- GPU uniform blocks `u_collisionSphere` and `u_sphereParams` shared by both shader stages.
+- Tests the first entering segment/sphere intersection across 8 time intervals in a particle lifespan. Exact for straight-line motion, approximate for accelerating ballistic motion.
+- Resolves a single bounce with reflected normal velocity. No persistent state, no multi-bounce or contact stabilization.
+- Start-inside-sphere particles skip sphere collision; place spawn geometry outside the collider.
+- Drag is not included in collision timing. Use `drag=0` for verification.
+- **Plane and sphere modes are currently independent and are not a combined earliest-contact solver.** Test sphere with plane collision disabled.
+- 8 chord evaluations per vertex per particle can be costly; benchmark in Web Mobile before release.
+
+### Sphere smoke test
+1. Update engine and reimport the effect. Set `collideWithPlane=false`, `collideWithSphere=true`.
+2. Put emitter at world `(-3, 0, 0)`, sphere center at `(0,0,0)`, radius `1`; turn gravity off.
+3. Current emitter velocity distribution is randomized, so a fraction of particles will travel toward sphere when `speed` is set to `4`. Set `capacity=1000`, `lifetime=3`, `spawnExtent=(0,0,0)`, `sphereRestitution=1`.
+4. Compare sphere mode ON and OFF: crossing streams should rebound off the sphere. Use `sphereRestitution=0` to compare inelastic normal response.
+5. Check baseline billboards and stretched mode with sphere disabled; report any EFX import/link errors.
+6. Pending: directed emitter velocity control to make deterministic head-on sphere tests easier.
+
 ## M5.2 — rendering extension in progress (2026-10-11)
 
 Implemented (awaiting Creator test):
