@@ -25,6 +25,8 @@ CCEffect %{
         mainColor: { value: [1, 0.8, 0.3, 1], editor: { type: color } }
         u_stretchParams: { value: [0, 1, 0, 0], editor: { visible: false } }
         u_collisionPlane: { value: [0, 0, 0.5, 0], editor: { visible: false } }
+        u_collisionSphere: { value: [0, 0, 0, 0], editor: { visible: false } }
+        u_sphereParams: { value: [0, 1, 0.5, 0], editor: { visible: false } }
     - vert: gpu-particle-vs:vert
       frag: gpu-particle-fs:frag
       phase: deferred-forward
@@ -55,6 +57,8 @@ CCProgram gpu-particle-vs %{
     vec4 mainColor;
     vec4 u_stretchParams;
     vec4 u_collisionPlane;
+    vec4 u_collisionSphere;
+    vec4 u_sphereParams;
   };
 
   out vec2 v_uv;
@@ -116,6 +120,52 @@ CCProgram gpu-particle-vs %{
         if (world.y <= height + 0.0001 && velocityWorld.y < 0.0) velocityWorld.y = 0.0;
       }
     }
+    // M5.2: swept sphere contact along eight ballistic trajectory chords.
+    // Approximate continuous collision for gravity trajectories; exact for
+    // straight-line motion. Resolve the first entering hit only.
+    if (u_sphereParams.x > 0.5 && u_sphereParams.y > 0.0001) {
+      vec3 sphereCenter = u_collisionSphere.xyz;
+      float radius = u_sphereParams.y;
+      vec3 startWorld = (matWorld * vec4(In.position.xyz, 1.0)).xyz;
+      vec3 initialVelocity = mat3(matWorld) * In.normal.xyz;
+      vec3 gravityWorld = mat3(matWorld) * u_gravity.xyz;
+      if (dot(startWorld - sphereCenter, startWorld - sphereCenter) > radius * radius) {
+        float impactTime = -1.0;
+        vec3 contactPoint = startWorld;
+        const int STEPS = 8;
+        float stepTime = max(0.001, life / float(STEPS));
+        for (int j = 0; j < STEPS; ++j) {
+          float t0 = float(j) * stepTime;
+          float t1 = min(life, t0 + stepTime);
+          vec3 a = startWorld + initialVelocity * t0 + 0.5 * gravityWorld * t0 * t0;
+          vec3 b = startWorld + initialVelocity * t1 + 0.5 * gravityWorld * t1 * t1;
+          vec3 segment = b - a;
+          vec3 offset = a - sphereCenter;
+          float A = dot(segment, segment);
+          float B = 2.0 * dot(offset, segment);
+          float C = dot(offset, offset) - radius * radius;
+          float disc = B * B - 4.0 * A * C;
+          if (A > 0.0000001 && disc >= 0.0) {
+            float k = (-B - sqrt(disc)) / (2.0 * A);
+            if (k >= 0.0 && k <= 1.0) {
+              impactTime = mix(t0, t1, k);
+              contactPoint = a + segment * k;
+              break;
+            }
+          }
+        }
+        if (impactTime >= 0.0 && t >= impactTime) {
+          float remaining = t - impactTime;
+          vec3 normal = normalize(contactPoint - sphereCenter);
+          vec3 incoming = initialVelocity + gravityWorld * impactTime;
+          vec3 bounced = incoming - (1.0 + clamp(u_sphereParams.z, 0.0, 1.0))
+              * min(dot(incoming, normal), 0.0) * normal;
+          world = contactPoint + bounced * remaining
+              + 0.5 * gravityWorld * remaining * remaining;
+          velocityWorld = bounced + gravityWorld * remaining;
+        }
+      }
+    }
     // View matrix rows represent camera right and up in world space.
     vec3 right = vec3(cc_matView[0][0], cc_matView[1][0], cc_matView[2][0]);
     vec3 up = vec3(cc_matView[0][1], cc_matView[1][1], cc_matView[2][1]);
@@ -154,6 +204,8 @@ CCProgram gpu-particle-fs %{
     vec4 mainColor;
     vec4 u_stretchParams;
     vec4 u_collisionPlane;
+    vec4 u_collisionSphere;
+    vec4 u_sphereParams;
   };
   in vec2 v_uv;
   in float v_alpha;
